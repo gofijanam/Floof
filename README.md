@@ -34,3 +34,8 @@ These are not SBF/local-validator tests or an audit. Do not deploy the build-onl
 - `GET /api/chain/windows/:address`: decoded finalized events, separate from the sandbox ledger.
 
 The original prototype screenshots are reference material, not current QA evidence. GitHub source export excludes that old screenshot archive; all runtime assets are included.
+
+
+### Devnet backend continuation
+
+See [Devnet runbook](docs/DEVNET-RUNBOOK.md) for the exact activation boundary, funding requirement and remaining indexing/CPMM/Scout automation work. Real LaunchLab CPIs pass the [SBF integration suite](scripts/sbf-integration.mjs); public Devnet deployment has not occurred. The website remains sandbox until that deployment is verified.

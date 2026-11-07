@@ -46,3 +46,8 @@ The updated Create form was rendered in the browser; saving a draft and reloadin
 - Anchor CPI account/signing constraints: https://www.anchor-lang.com/docs/basics/cpi
 
 Do not label this project “fully completed”, “live trading”, “audited”, or “Devnet deployed” based only on this sandbox delivery.
+
+
+## 2026-11-07 backend continuation
+
+The earlier LaunchLab blocker list above is superseded in part by `DEVNET-RUNBOOK.md` and `SBF-VERIFICATION.json`. Mint reservation, atomic real LaunchLab initialization + buy, exact accounting, creator fee forwarding, native vesting wrapper, holder-snapshot compensation, real trade builders, RPC eligibility/attestations, transaction preparation/finalization, and keeper/deployment tooling are now implemented. Actual Devnet program binaries were exercised in SBF locally, including successful settlement, cap rejection, token claims, failed-window SOL refunds, real buy/sell, creator fee forwarding, lock rejection, current-holder compensation and funded Scout claims. Public Devnet is still unfunded/undeployed; the live website stays sandbox. Read the runbook for remaining work and evidence limits.

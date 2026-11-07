@@ -123,11 +123,11 @@ export default function Trade() {
         <div className="space-y-4 lg:sticky lg:top-24 lg:self-start">
           <TradePanel id={c.id} />
           <Card className="p-4">
-            <div className="flex items-center justify-between"><div className="label">bonding curve</div><span className="font-num text-xs font-semibold text-lav tnum">{c.curveSol.toFixed(1)} / {GRADUATE_SOL} SOL</span></div>
+            <div className="flex items-center justify-between"><div className="label">bonding curve</div><span className="font-num text-xs font-semibold text-lav tnum">{c.curveSol.toFixed(1)} / {c.graduationTarget || GRADUATE_SOL} SOL</span></div>
             <div className="relative mt-3 h-3 overflow-hidden rounded-full bg-night ring-1 ring-lav/10">
-              <motion.div className="absolute inset-y-0 left-0 rounded-full anim-gradient" style={{ backgroundImage: grad ? 'linear-gradient(90deg,#7CF5C8,#5FD4FF,#7CF5C8)' : 'linear-gradient(90deg,#B69CFF,#FF5FB8,#B69CFF)' }} animate={{ width: `${(c.curveSol / GRADUATE_SOL) * 100}%` }} />
+              <motion.div className="absolute inset-y-0 left-0 rounded-full anim-gradient" style={{ backgroundImage: grad ? 'linear-gradient(90deg,#7CF5C8,#5FD4FF,#7CF5C8)' : 'linear-gradient(90deg,#B69CFF,#FF5FB8,#B69CFF)' }} animate={{ width: `${(c.curveSol / (c.graduationTarget || GRADUATE_SOL)) * 100}%` }} />
             </div>
-            <div className="mt-2 text-xs font-bold text-lav">{grad ? 'Graduated — sandbox pool target reached.' : <>When the curve reaches {GRADUATE_SOL} SOL, the intended Devnet flow migrates to <span className="text-cream">Raydium CPMM</span>. This sandbox does not migrate on-chain. {(GRADUATE_SOL - c.curveSol).toFixed(1)} SOL to go.</>}</div>
+            <div className="mt-2 text-xs font-bold text-lav">{grad ? 'Graduated — sandbox pool target reached.' : <>When the curve reaches {c.graduationTarget || GRADUATE_SOL} SOL, the intended Devnet flow migrates to <span className="text-cream">Raydium CPMM</span>. This sandbox does not migrate on-chain. {(GRADUATE_SOL - c.curveSol).toFixed(1)} SOL to go.</>}</div>
           </Card>
           <Card className="p-4">
             <div className="flex items-center justify-between"><div className="flex items-center gap-2 font-extrabold"><IShield s={16} className="text-mint" /> TRUTH</div><Link to={`/truth/${c.ca}`} className="text-xs font-extrabold text-blue hover:underline">Full report →</Link></div>
@@ -156,6 +156,8 @@ function TradePanel({ id }: { id: string }) {
   const bal = useStore((s) => s.sol)
   const pos = useStore((s) => s.positions[id])
   const [side, setSide] = useState<'buy' | 'sell'>('buy')
+  const devnet=useStore(s=>s.mode==='devnet')
+  useEffect(()=>{if(devnet)setUnit(side==='buy'?'sol':'token')},[side,devnet])
   const [unit, setUnit] = useState<'sol' | 'token'>('sol')
   const [amt, setAmt] = useState('')
   const [slip, setSlip] = useState(1)
@@ -211,7 +213,7 @@ function TradePanel({ id }: { id: string }) {
       </div>
       <div className={cx('mt-1.5 flex items-center rounded-2xl border bg-night/70 pr-2', err ? 'border-danger/60' : 'border-lav/20 focus-within:border-blue/60')}>
         <input inputMode="decimal" value={amt} onChange={(e) => setAmt(e.target.value.replace(/[^0-9.]/g, ''))} placeholder="0.0" className="w-full bg-transparent px-4 py-3 font-num text-2xl font-semibold outline-none tnum placeholder:text-lav/30" aria-label="Amount" aria-invalid={!!err} />
-        <button onClick={() => { setUnit((u) => (u === 'sol' ? 'token' : 'sol')); setAmt('') }} className="flex shrink-0 items-center gap-1 rounded-xl bg-lav/10 px-2.5 py-2 text-xs font-black hover:bg-lav/20" aria-label="Toggle SOL or token amount">
+        <button onClick={() => { if(!devnet){setUnit((u) => (u === 'sol' ? 'token' : 'sol')); setAmt('')} }} className="flex shrink-0 items-center gap-1 rounded-xl bg-lav/10 px-2.5 py-2 text-xs font-black hover:bg-lav/20" aria-label="Toggle SOL or token amount">
           {unit === 'sol' ? 'SOL' : `$${c.ticker}`} <ISwap s={12} />
         </button>
       </div>

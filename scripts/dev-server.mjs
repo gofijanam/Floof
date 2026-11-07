@@ -6,7 +6,7 @@ import {sqliteDB} from './sqlite-adapter.mjs';
 await mkdir('.local',{recursive:true});
 const db=sqliteDB('.local/floof.sqlite');
 for(const file of (await readdir('drizzle')).filter(f=>f.endsWith('.sql')).sort())db.raw.exec(await readFile('drizzle/'+file,'utf8'));
-await build({entryPoints:['server/worker.mjs'],bundle:true,format:'esm',platform:'node',target:'node24',outfile:'.local/worker.mjs'});
+await build({entryPoints:['server/worker.mjs'],bundle:true,format:'esm',platform:'node',packages:'external',target:'node24',outfile:'.local/worker.mjs'});
 const worker=(await import('../.local/worker.mjs?'+Date.now())).default;
 const bucket={async put(key,data,options){const file='.local/'+key;await mkdir('.local/images',{recursive:true});await writeFile(file,data);await writeFile(file+'.json',JSON.stringify(options))},async get(key){try{const body=await readFile('.local/'+key),meta=JSON.parse(await readFile('.local/'+key+'.json','utf8'));return {body,writeHttpMetadata(headers){headers.set('Content-Type',meta.httpMetadata.contentType)}}}catch{return null}}};
 const vite=await createServer({server:{middlewareMode:true,allowedHosts:true},appType:'spa'});

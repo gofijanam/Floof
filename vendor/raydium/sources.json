@@ -1,0 +1,44 @@
+[
+  {
+    "repository": "raydium-sdk-V2",
+    "commit": "1cf5bb129dbbb1c76dab67819c3d478349c8ed25",
+    "source": "https://raw.githubusercontent.com/raydium-io/raydium-sdk-V2/1cf5bb129dbbb1c76dab67819c3d478349c8ed25/src/raydium/launchpad/instrument.ts",
+    "file": "vendor/raydium/raydium-sdk-V2-instrument.ts"
+  },
+  {
+    "repository": "raydium-sdk-V2",
+    "commit": "1cf5bb129dbbb1c76dab67819c3d478349c8ed25",
+    "source": "https://raw.githubusercontent.com/raydium-io/raydium-sdk-V2/1cf5bb129dbbb1c76dab67819c3d478349c8ed25/src/raydium/launchpad/layout.ts",
+    "file": "vendor/raydium/raydium-sdk-V2-layout.ts"
+  },
+  {
+    "repository": "raydium-sdk-V2",
+    "commit": "1cf5bb129dbbb1c76dab67819c3d478349c8ed25",
+    "source": "https://raw.githubusercontent.com/raydium-io/raydium-sdk-V2/1cf5bb129dbbb1c76dab67819c3d478349c8ed25/src/raydium/launchpad/pda.ts",
+    "file": "vendor/raydium/raydium-sdk-V2-pda.ts"
+  },
+  {
+    "repository": "raydium-sdk-V2",
+    "commit": "1cf5bb129dbbb1c76dab67819c3d478349c8ed25",
+    "source": "https://raw.githubusercontent.com/raydium-io/raydium-sdk-V2/1cf5bb129dbbb1c76dab67819c3d478349c8ed25/src/raydium/launchpad/curve/constantProductCurve.ts",
+    "file": "vendor/raydium/raydium-sdk-V2-constantProductCurve.ts"
+  },
+  {
+    "repository": "raydium-idl",
+    "commit": "e7e0c96fe77bcf6a020b84a44c47a722aac8e359",
+    "source": "https://raw.githubusercontent.com/raydium-io/raydium-idl/e7e0c96fe77bcf6a020b84a44c47a722aac8e359/raydium_launchpad/raydium_launchpad.json",
+    "file": "vendor/raydium/raydium-idl-raydium_launchpad.json"
+  },
+  {
+    "repository": "raydium-cpi",
+    "commit": "115df2779d53bacc7db9d0be2773a4b48a6d372b",
+    "source": "https://raw.githubusercontent.com/raydium-io/raydium-cpi/115df2779d53bacc7db9d0be2773a4b48a6d372b/programs/launch-cpi/src/context.rs",
+    "file": "vendor/raydium/raydium-cpi-context.rs"
+  },
+  {
+    "repository": "raydium-cpi",
+    "commit": "115df2779d53bacc7db9d0be2773a4b48a6d372b",
+    "source": "https://raw.githubusercontent.com/raydium-io/raydium-cpi/115df2779d53bacc7db9d0be2773a4b48a6d372b/programs/launch-cpi/src/states.rs",
+    "file": "vendor/raydium/raydium-cpi-states.rs"
+  }
+]

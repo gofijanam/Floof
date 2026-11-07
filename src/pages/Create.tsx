@@ -29,6 +29,8 @@ export default function Create() {
   const [open, setOpen] = useState(false)
   const [done, setDone] = useState<string | null>(null)
   const wallet = useStore((s) => s.wallet)
+  const devnet=useStore(s=>s.mode==='devnet')
+  const reserve=devnet?0.1:0
   const bal = useStore((s) => s.sol)
   const nav = useNavigate()
   const [uploading, setUploading] = useState(false)
@@ -78,9 +80,9 @@ export default function Create() {
     if (!/^(?:0|[1-9]\d*)(?:\.\d{1,9})?$/.test(f.minTarget) || !(minT > 0)) e.minTarget = 'Enter a min target'
     else if (minT < maxRaise * 0.1) e.minTarget = `At least 10% of max raise (${(maxRaise * 0.1).toFixed(1)} SOL)`
     else if (minT > maxRaise) e.minTarget = 'Cannot exceed max raise'
-    if (wallet && f.bond + 0.02 > bal) e.bond = 'Not enough test SOL for the bond and fee'
+    if (wallet && f.bond + 0.02 + reserve > bal) e.bond = 'Not enough test SOL for the bond and fee'
     return e
-  }, [f, ceiling, maxRaise, minT, bal, wallet])
+  }, [f, ceiling, maxRaise, minT, bal, wallet, reserve])
   const stepFields = [['name', 'ticker', 'desc', 'web', 'x', 'tg'], ['ceiling', 'minTarget'], ['bond'], []]
   const stepOk = (i: number) => stepFields[i].every((k) => !errors[k])
   const next = () => { setTouched(true); setChecked(false); if (stepOk(step)) { setStep((s) => Math.min(3, s + 1)); setTouched(false) } }
@@ -189,7 +191,7 @@ export default function Create() {
                     <Toggle on locked label="Linked accounts share one cap" />
                     <Toggle on={f.walletAge} onChange={(v) => set('walletAge', v)} label="Wallet age ≥ 7 days" />
                     <Toggle on={f.balHistory} onChange={(v) => set('balHistory', v)} label="Require prior on-chain activity (≥ 10 tx)" />
-                    <p className="mt-2 text-xs font-semibold text-lav">Wallet-history preferences are saved for Devnet. The current sandbox enforces the account cap only.</p>
+                    <p className="mt-2 text-xs font-semibold text-lav">{devnet?'Wallet history and common funding sources are checked before each pledge. Linked groups share the 1% cap.':'Wallet-history preferences are saved for Devnet. The current sandbox enforces the account cap only.'}</p>
                   </div>
                 </div>
               )}
@@ -199,7 +201,7 @@ export default function Create() {
                     <div className="flex items-end justify-between"><div className="label">Creator bond</div><div className="font-num text-3xl font-semibold text-blue tnum">{f.bond} SOL</div></div>
                     <input type="range" min={1} max={50} value={f.bond} onChange={(e) => set('bond', +e.target.value)} className="mt-2 w-full accent-[#5FD4FF]" aria-label="Bond SOL" />
                     {err('bond') && <div className="mt-1 text-xs font-extrabold text-danger">{errors.bond}</div>}
-                    <p className="mt-2 text-sm font-semibold text-lav">In the sandbox, your bond returns if the target is missed, or after 30 days following creation. Creator tokens stay locked for the period you choose.</p>
+                    <p className="mt-2 text-sm font-semibold text-lav">{devnet?'The bond can be claimed after a failed window or 30 clean days. Creator tokens unlock after both your selected lock period and Raydium graduation.':'In the sandbox, your bond returns if the target is missed, or after 30 days following creation. Creator tokens stay locked for the period you choose.'}</p>
                   </div>
                   <div className="grid gap-4 sm:grid-cols-2">
                     <Field label={`Creator allocation · ${f.creatorPct}%`}><input aria-label="Creator allocation percentage" type="range" min={0} max={5} step={0.5} value={f.creatorPct} onChange={(e) => set('creatorPct', +e.target.value)} className="w-full accent-[#FF5FB8]" /></Field>
@@ -214,12 +216,12 @@ export default function Create() {
               {step === 3 && (
                 <div className="space-y-4">
                   <div className="divide-y divide-lav/10 rounded-2xl bg-night/50 text-sm ring-1 ring-lav/10">
-                    {[['Coin', `${f.name} · $${f.ticker}`], ['Window', `opens in ${f.startIn} min · 10 min long`], ['Price ceiling', `${fmtPrice(ceiling)} SOL`], ['Window supply', `${f.alloc}% · ${(windowTokens / 1e6).toFixed(0)}M tokens`], ['Max raise / min target', `${maxRaise.toFixed(1)} / ${minT} SOL`], ['Per-account cap', `${(maxRaise * 0.01).toFixed(2)} SOL`], ['Creator allocation', `${f.creatorPct}% · vest ${f.vest}d`], ['After window', 'Sandbox trading pool'], ['Sandbox trading fee', `${FEES.total}% (${FEES.raydium} Raydium · ${FEES.creator} you · ${FEES.platform} platform)`]].map(([k, v]) => (
+                    {[['Coin', `${f.name} · $${f.ticker}`], ['Window', `opens in ${f.startIn} min · 10 min long`], ['Price ceiling', `${fmtPrice(ceiling)} SOL`], ['Window supply', `${f.alloc}% · ${(windowTokens / 1e6).toFixed(0)}M tokens`], ['Max raise / min target', `${maxRaise.toFixed(1)} / ${minT} SOL`], ['Per-account cap', `${(maxRaise * 0.01).toFixed(2)} SOL`], ['Creator allocation', `${f.creatorPct}% · vest ${f.vest}d`], ['After window', devnet?'Raydium LaunchLab':'Sandbox trading pool'], [devnet?'Trading fee':'Sandbox trading fee', `${FEES.total}% (${FEES.raydium} Raydium · ${FEES.creator} you · ${FEES.platform} platform)`]].map(([k, v]) => (
                       <div key={k} className="flex justify-between gap-4 px-4 py-2.5"><span className="font-bold text-lav">{k}</span><span className="text-right font-extrabold">{v}</span></div>
                     ))}
                   </div>
-                  <div className="flex items-center justify-between rounded-2xl bg-blue/10 px-4 py-3 font-extrabold ring-1 ring-blue/25"><span className="flex items-center gap-2"><ILock s={16} /> Due now</span><span className="font-num tnum">{(f.bond + 0.02).toFixed(2)} test SOL</span></div>
-                  <p className="text-xs font-semibold text-lav">{f.bond} test SOL is refundable bond collateral; 0.02 test SOL is the creation fee. {wallet ? `Balance after creation: ${(bal - f.bond - 0.02).toFixed(2)} test SOL.` : 'Open your sandbox to receive a test balance.'}</p>
+                  <div className="flex items-center justify-between rounded-2xl bg-blue/10 px-4 py-3 font-extrabold ring-1 ring-blue/25"><span className="flex items-center gap-2"><ILock s={16} /> Due now</span><span className="font-num tnum">{(f.bond + 0.02 + reserve).toFixed(2)} test SOL</span></div>
+                  <p className="text-xs font-semibold text-lav">{f.bond} test SOL is refundable bond collateral; 0.02 test SOL is the creation fee. {devnet?'An additional 0.1 test SOL funds pool rent; unused reserve can be reclaimed. Network and account rent are additional. ':''} {wallet ? `Balance after creation: ${(bal - f.bond - 0.02 - reserve).toFixed(2)} test SOL.` : 'Open your sandbox to receive a test balance.'}</p>
                   <label className="flex cursor-pointer items-start gap-3 text-sm font-bold text-lav"><input type="checkbox" className="mt-1 h-4 w-4 accent-[#FF5FB8]" checked={checked} onChange={e => setChecked(e.target.checked)} />I reviewed these settings. They cannot be edited after creation. This creates a test launch with no real SOL or on-chain token.</label>
                 </div>
               )}
@@ -245,8 +247,8 @@ export default function Create() {
         </div>
       </div>
       <TxModal open={open} onClose={() => setOpen(false)} title={`Create $${f.ticker}`} confirmLabel="Create test launch"
-        rows={[{ k: 'Bond (locked)', v: `${f.bond} SOL`, strong: true }, { k: 'Create fee', v: '0.02 SOL' }, { k: 'Window', v: `in ${f.startIn} min` }, { k: 'Programs', v: 'Floof sandbox ledger' }]}
-        note="Creates a persistent sandbox launch. No on-chain mint is created." onConfirm={create} />
+        rows={[{ k: 'Bond (locked)', v: `${f.bond} SOL`, strong: true }, { k: 'Create fee', v: '0.02 SOL' }, { k: 'Window', v: `in ${f.startIn} min` }, { k: 'Programs', v: devnet?'Floof + Raydium LaunchLab':'Floof sandbox ledger' }]}
+        note={devnet?'Signs a Devnet launch reservation. The mint and pool are created atomically at successful settlement.':'Creates a persistent sandbox launch. No on-chain mint is created.'} onConfirm={create} />
     </div>
   )
 }

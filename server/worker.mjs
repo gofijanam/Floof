@@ -1,3 +1,6 @@
+import {chainTruth} from './chain-truth.mjs';
+import {chainSnapshot} from './chain-state.mjs';
+import {prepareChain,confirmChain} from './chain-service.mjs';
 import {ingestFinalized,chainWindow} from './chain-indexer.mjs';
 import {readDraft,saveDraft} from './launch-drafts.mjs';
 import {Repository} from './repository.mjs';
@@ -31,7 +34,7 @@ async function route(req,env,ctx){
  if(p==='/health')return json({ok:!!env.DB,service:'floof-api',version:'0.3.0',mode:'sandbox',chainExecution:false,storage:env.DB?'D1':'missing'});
  requireThat(env.DB,'DATABASE_UNAVAILABLE','Database binding is unavailable.',503);
  const repo=new Repository(env.DB,()=>seedState(buildCoins(now),now));
- if(p==='/integrations')return json({mode:'sandbox',chainExecution:false,devnetRpc:!!env.SOLANA_DEVNET_RPC_URL,escrowProgram:env.FLOOF_PROGRAM_ID||null,launchlab:'unverified_adapter',indexer:!!env.INDEXER_SECRET,requirements:['Deploy and verify the escrow program on Devnet','Configure and test the LaunchLab settlement adapter and on-chain fees','Configure RPC/indexer and multisig oracle','Publish a funded on-chain Scout distributor']});
+ if(p==='/integrations')return json({mode:env.CHAIN_EXECUTION==='devnet'?'devnet':'sandbox',chainExecution:env.CHAIN_EXECUTION==='devnet',devnetRpc:!!env.SOLANA_DEVNET_RPC_URL,escrowProgram:env.FLOOF_PROGRAM_ID||null,launchlab:'verified_sbf_with_real_devnet_binary',indexer:!!env.INDEXER_SECRET,requirements:['Fund and deploy the verified program on public Devnet','Configure attestor and independent oracle runtime secrets','Run the persistent indexer/keeper and funded Scout distribution','Verify Raydium-operated CPMM migration and route migrated pools']});
  if(p==='/drafts/launch'){
   requireThat(id,'AUTH_REQUIRED','Sign in to save or restore a draft.',401);
   if(req.method==='GET')return json(await readDraft(env.DB,id));
@@ -44,6 +47,7 @@ async function route(req,env,ctx){
  if(p.startsWith('/images/')&&req.method==='GET'){
   requireThat(/^\/images\/[a-f0-9]{64}\.(png|jpg|gif|webp)$/.test(p),'NOT_FOUND','Image not found.',404);const obj=await env.BUCKET?.get(p.slice(1));requireThat(obj,'NOT_FOUND','Image not found.',404);const headers=new Headers({'X-Content-Type-Options':'nosniff','Cache-Control':'private, max-age=86400'});obj.writeHttpMetadata(headers);return new Response(obj.body,{headers});
  }
+ if(p.startsWith('/chain/truth/')&&req.method==='GET'){const mint=p.slice('/chain/truth/'.length);requireThat(safeWallet(mint),'MINT','Invalid mint address.');return json(await chainTruth(env,mint));}
  if(p.startsWith('/chain/windows/')&&req.method==='GET'){
   requireThat(env.FLOOF_PROGRAM_ID&&safeWallet(env.FLOOF_PROGRAM_ID),'PROGRAM','Floof Devnet program is not configured.',503);
   const address=p.slice('/chain/windows/'.length);requireThat(safeWallet(address),'WINDOW','Invalid window address.');
@@ -59,7 +63,10 @@ async function route(req,env,ctx){
   await repo.change(s=>{const a=s.accounts[id];requireThat(a,'CONNECT','Open your sandbox wallet first.',401);requireThat(!Object.values(s.accounts).some(other=>other.id!==id&&other.linkedWallet===challenge.wallet),'WALLET_LINKED','This wallet is already linked to another account.',409);a.linkedWallet=challenge.wallet;return true});return json({verified:true,wallet:challenge.wallet,network:'devnet',transferAuthorization:false});
  }
  if(p==='/wallet/balance'&&req.method==='GET'){requireThat(id,'AUTH_REQUIRED','Sign in first.',401);const {state}=await repo.read(),wallet=state.accounts[id]?.linkedWallet;requireThat(wallet,'WALLET','Link a wallet first.');const value=await rpc(env,'getBalance',[wallet,{commitment:'confirmed'}]);return json({wallet,lamports:value.value,sol:value.value/1e9,network:'devnet',sandboxBalanceSeparate:true})}
- if(p==='/chain/prepare'&&req.method==='POST')throw new AppError(503,'CHAIN_NOT_DEPLOYED','Real Devnet transactions are disabled until the escrow program and LaunchLab adapter are deployed and verified. No funds were moved.');
+ if((p==='/chain/prepare'||p==='/chain/confirm')&&req.method==='POST'){
+  requireThat(id,'AUTH_REQUIRED','Sign in before preparing a transaction.',401);const {state}=await repo.read(),wallet=state.accounts[id]?.linkedWallet;requireThat(wallet,'WALLET','Link and verify your wallet first.',401);const b=await body(req);
+  return json(p==='/chain/prepare'?await prepareChain(env,env.DB,id,wallet,b,now):await confirmChain(env,env.DB,id,b,now));
+ }
  if(p==='/indexer/webhook'&&req.method==='POST'){
   requireThat(env.INDEXER_SECRET&&req.headers.get('Authorization')===`Bearer ${env.INDEXER_SECRET}`,'FORBIDDEN','Invalid indexer authorization.',403);requireThat(env.FLOOF_PROGRAM_ID&&safeWallet(env.FLOOF_PROGRAM_ID),'PROGRAM','Configure the deployed Floof program first.',503);const b=await body(req);requireThat(Array.isArray(b.signatures)&&b.signatures.length<=10,'BATCH','Supply up to ten transaction signatures.');let inserted=0;
   for(const signature of b.signatures){requireThat(typeof signature==='string'&&/^[1-9A-HJ-NP-Za-km-z]{80,90}$/.test(signature),'SIGNATURE','Invalid transaction signature.');const tx=await rpc(env,'getTransaction',[signature,{encoding:'json',commitment:'finalized',maxSupportedTransactionVersion:0}]);requireThat(tx&&tx.meta&&!tx.meta.err,'TRANSACTION','Transaction is missing, unfinalized or failed.',409);const r=await ingestFinalized(env.DB,signature,tx,env.FLOOF_PROGRAM_ID,now);inserted+=r.inserted}
@@ -72,6 +79,22 @@ async function route(req,env,ctx){
  if(p==='/admin/crank'&&req.method==='POST'){
   requireThat(env.ADMIN_SECRET&&req.headers.get('Authorization')===`Bearer ${env.ADMIN_SECRET}`,'FORBIDDEN','Admin authorization required.',403);const result=await repo.change(s=>({changed:tick(s,now),audit:audit(s)}));return json(result);
  }
+ if(env.CHAIN_EXECUTION==='devnet'&&['/bootstrap','/state','/coins','/feed','/stats'].includes(p)&&req.method==='GET'){
+  const {state}=await repo.read(),view=await chainSnapshot(env,env.DB,state.accounts[id]?.linkedWallet,now);return json(p==='/coins'?view.coins:p==='/feed'?view.feed:p==='/stats'?view.stats:view);
+ }
+ if(p.startsWith('/chain/prepared/')&&req.method==='GET'){requireThat(id,'AUTH_REQUIRED','Sign in first.',401);const row=await env.DB.prepare('SELECT * FROM chain_requests WHERE id=? AND owner_id=?').bind(p.slice('/chain/prepared/'.length),id).first();requireThat(row&&row.expires_at>now&&!row.signature,'EXPIRED','Prepared transaction expired or was already confirmed.',409);return json(JSON.parse(row.transaction_json));}
+ if(env.CHAIN_EXECUTION==='devnet'&&p==='/quote'&&req.method==='POST'){
+  requireThat(id,'AUTH_REQUIRED','Sign in first.',401);const {state}=await repo.read(),wallet=state.accounts[id]?.linkedWallet;requireThat(wallet,'WALLET','Link Phantom first.',401);const b=await body(req);requireThat(b.side==='buy'?b.unit==='sol':b.unit==='token','UNIT','Use SOL for buys and tokens for sells.');const amount=Number(b.amount),scale=b.side==='buy'?1e9:1e6;requireThat(Number.isFinite(amount)&&amount>0&&Number.isSafeInteger(Math.round(amount*scale)),'AMOUNT','Invalid trade amount.');const tx=await prepareChain(env,env.DB,id,wallet,{action:b.side,window:b.coin,amount:String(Math.round(amount*scale)),slippageBps:b.slippageBps},now),q=tx.quote,sol=Number(b.side==='buy'?q.amount:q.output)/1e9,tokens=Number(b.side==='buy'?q.output:q.amount)/1e6;return json({quoteId:tx.id,sol,tokens,fee:Number(q.feeLamports)/1e9,avg:sol/tokens,impact:0,minOut:Number(q.minimumOut)/(b.side==='buy'?1e6:1e9),expiresAt:tx.expiresAt,mode:'devnet'});
+ }
+ if(env.CHAIN_EXECUTION==='devnet'&&p.startsWith('/coins/')&&req.method==='GET'){
+  const [, ,cid,section]=p.split('/');requireThat(safeWallet(cid),'COIN','Invalid on-chain window.');
+  if(section==='trades'||section==='candles'){const rows=await env.DB.prepare('SELECT * FROM chain_trades WHERE program=? AND window=? ORDER BY block_time DESC LIMIT 1000').bind(env.FLOOF_PROGRAM_ID,cid).all();if(section==='trades')return json(rows.results.map(r=>({id:r.signature,coin:cid,wallet:r.wallet,kind:r.side,amount:Number(r.lamports)/1e9,tokens:Number(r.tokens)/1e6,t:r.block_time})));const period=({'5m':300000,'1h':3600000,'4h':14400000,'1d':86400000})[u.searchParams.get('tf')||'1h'];requireThat(period,'TIMEFRAME','Invalid chart timeframe.');const buckets=new Map();for(const r of rows.results.reverse()){const at=Math.floor(r.block_time/period)*period,price=Number(r.lamports)/Number(r.tokens)/1000,v=Number(r.lamports)/1e9,bar=buckets.get(at);if(bar){bar[2]=Math.max(bar[2],price);bar[3]=Math.min(bar[3],price);bar[4]=price;bar[5]+=v}else buckets.set(at,[at,price,price,price,price,v])}return json([...buckets.values()]);}
+  const {state}=await repo.read(),view=await chainSnapshot(env,env.DB,state.accounts[id]?.linkedWallet,now),c=view.coins.find(c=>c.id===cid);requireThat(c,'NOT_FOUND','Window not found.',404);if(!section)return json(c);if(section==='settlement'){const claim=view.claims.find(c=>c.id===`window:${cid}`);return json({status:c.status,settled:!['open','upcoming'].includes(c.status),price:c.clearingPrice,fill:c.pledged?c.clearingPrice*c.windowTokens/c.pledged:0,myRefund:claim?.amount||0,myTokens:claim?.tokens||0,claimed:claim?.claimed||false,mode:'devnet'})}if(section==='holders'){const result=await rpc(env,'getTokenLargestAccounts',[c.ca,{commitment:'finalized'}]);return json(result.value.filter(a=>BigInt(a.amount)>0n).map(a=>({wallet:a.address,tokens:Number(a.amount)/1e6,pct:Number(a.amount)/1e15*100,tag:'token account'})));}
+ }
+ if(p==='/chain/launch-settings'&&req.method==='POST'){
+  requireThat(id,'AUTH_REQUIRED','Sign in first.',401);requireThat(env.CHAIN_EXECUTION==='devnet','CHAIN_NOT_DEPLOYED','Devnet is not activated.',503);const b=await body(req),v=validateCoin(b,now);requireThat(env.BUCKET,'UPLOAD_UNAVAILABLE','Metadata storage is unavailable.',503);const metadata={name:v.name,symbol:v.ticker,description:v.tagline,image:v.image?new URL(v.image,u.origin).href:null,external_url:v.links.web||null};const digest=await hash(JSON.stringify(metadata));await env.BUCKET.put(`metadata/${digest}.json`,JSON.stringify(metadata),{httpMetadata:{contentType:'application/json'}});return json({nonce:String(BigInt('0x'+crypto.randomUUID().replaceAll('-','').slice(0,16))),name:v.name,symbol:v.ticker,uri:new URL(`/api/metadata/${digest}.json`,u.origin).href,start:Math.max(Math.floor(v.windowStart/1000),Math.floor(now/1000)+20),minTarget:String(v.minTargetL),maxRaise:String(v.maxRaiseL),windowTokens:String(v.windowUnits),creatorTokens:String(v.creatorUnits),bond:String(v.bondL),lockDays:v.lockDays,walletAge:v.policy.walletAge,history:v.policy.balHistory});
+ }
+ if(p.startsWith('/metadata/')&&req.method==='GET'){requireThat(/^\/metadata\/[a-f0-9]{64}\.json$/.test(p),'NOT_FOUND','Metadata not found.',404);const obj=await env.BUCKET?.get(p.slice(1));requireThat(obj,'NOT_FOUND','Metadata not found.',404);return new Response(obj.body,{headers:{'Content-Type':'application/json','X-Content-Type-Options':'nosniff'}})}
  if(req.method==='POST'){
   const b=await body(req);
   if(p==='/coins/prepare'){requireThat(id,'AUTH_REQUIRED','Sign in first.',401);const v=validateCoin(b,now),{state}=await repo.read();requireThat(!Object.values(state.coins).some(c=>c.ticker===v.ticker),'TICKER_EXISTS','This ticker is taken.',409);return json({mode:'sandbox',valid:true,tx:null,requiresWalletSignature:false,maximumRaise:v.maxRaiseL/1e9,notice:'Creating this record does not deploy an on-chain token.'})}

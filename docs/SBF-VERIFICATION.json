@@ -1,0 +1,23 @@
+{
+  "status": "passed",
+  "runtime": "LiteSVM SBF",
+  "program": "7hhrC7N6FRQyQLUbr4q9q5Dgqgj8zoDtDCiCd8m1XX3N",
+  "externalProgramSHA256": {
+    "DRay6fNdQ5J82H7xV6uq2aV3mNrUZ1J4PgSKsWgptcm6": "7c666612612d4156f5e9db1213d8dc7973e095c6eff0d472dab0e51179fd20c7",
+    "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s": "bb0842f6d5740eabe8f9fb3b723b9ecd89cadf9f48ef9ad6a9dc6cfa8a9658e4"
+  },
+  "settlementComputeUnits": "314229",
+  "raised": "1100000000",
+  "allocatedTokens": "199999999999998",
+  "mintReservedUntilSettlement": true,
+  "capAttackRejected": true,
+  "refundWithoutMint": true,
+  "doubleClaimsRejected": true,
+  "scoutFundedClaim": true,
+  "realBuyAndSell": true,
+  "creatorFeeForwarding": true,
+  "creatorLockEnforced": true,
+  "currentHolderCompensation": true,
+  "graduationAwaitingRaydium": true,
+  "atomicFeeFundedScoutEpoch": true
+}

@@ -1,0 +1,17 @@
+import {Buffer} from 'buffer';
+import {requireThat} from './errors.mjs';
+import {PROGRAM,key,pda,decodeWindow,discriminator} from './chain-client.mjs';
+export const DEVNET_GENESIS='EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG';
+export function rpcClient(env){return async(method,params=[])=>{const endpoint=env.SOLANA_DEVNET_RPC_URL||'https://api.devnet.solana.com',url=new URL(endpoint);requireThat(url.protocol==='https:'&&!url.username&&!url.password,'RPC_CONFIG','A secure Devnet RPC is required.',503);const response=await fetch(endpoint,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({jsonrpc:'2.0',id:1,method,params}),signal:AbortSignal.timeout(15000)});requireThat(response.ok,'RPC_UNAVAILABLE','Devnet RPC is temporarily unavailable.',503);const r=await response.json();requireThat(!r.error,'RPC_UNAVAILABLE','Devnet RPC could not complete this request.',503);return r.result}}
+export async function verifiedConfig(env,rpc){
+ requireThat(env.CHAIN_EXECUTION==='devnet'&&env.FLOOF_PROGRAM_ID===PROGRAM.toBase58(),'CHAIN_NOT_DEPLOYED','Devnet execution is not activated. No transaction has been prepared.',503);
+ requireThat(await rpc('getGenesisHash')===DEVNET_GENESIS,'WRONG_NETWORK','RPC network is not Devnet.',503);
+ const program=await rpc('getAccountInfo',[env.FLOOF_PROGRAM_ID,{encoding:'base64',commitment:'finalized'}]);requireThat(program.value?.executable,'PROGRAM_UNAVAILABLE','Floof program is not deployed.',503);
+ const config=await rpc('getAccountInfo',[pda(['config']).toBase58(),{encoding:'base64',commitment:'finalized'}]);requireThat(config.value?.owner===env.FLOOF_PROGRAM_ID,'CONFIG_UNAVAILABLE','Floof configuration is not initialized.',503);
+ const data=Buffer.from(config.value.data[0],'base64');requireThat(data.length===234&&data.subarray(0,8).equals(await discriminator('account:Config')),'CONFIG_UNAVAILABLE','Unsupported Floof configuration.',503);
+ const pk=o=>key(data.subarray(o,o+32)).toBase58();return {program:env.FLOOF_PROGRAM_ID,global:pk(8),platform:pk(40),treasury:pk(72),authority:pk(104),attestor:pk(136),oracleA:pk(168),oracleB:pk(200),paused:!!data[232]};
+}
+export async function fetchWindow(rpc,address,program=PROGRAM.toBase58()){
+ let pk;try{pk=key(address)}catch{requireThat(false,'WINDOW','Invalid window address.')}
+ const r=await rpc('getAccountInfo',[pk.toBase58(),{encoding:'base64',commitment:'confirmed'}]);requireThat(r.value?.owner===program,'WINDOW','Window is unavailable.',404);const w=await decodeWindow(Buffer.from(r.value.data[0],'base64'));requireThat(pda(['window',w.mint],program).equals(pk),'WINDOW','Noncanonical window address.');return w;
+}

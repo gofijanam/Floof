@@ -11,6 +11,7 @@ export interface Creator {
 }
 export interface Coin {
   image?: string | null
+  graduationTarget?: number; migrationPending?: boolean
   id: string; ticker: string; name: string; tagline: string; hue: number; accessory: Accessory
   creator: string; status: CoinStatus; ca: string
   // fair window
