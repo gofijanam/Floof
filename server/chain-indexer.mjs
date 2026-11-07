@@ -1,0 +1,45 @@
+import {requireThat} from './errors.mjs';
+import {base58encode,fromBase64,hash,hex} from './crypto.mjs';
+// Borsh layouts emitted by programs/floof-escrow. Amounts stay decimal strings.
+const layouts={WindowCreated:[['window','key'],['creator','key'],['mint','key'],['end','i64']],Pledged:[['window','key'],['wallet','key'],['amount','u64'],['total','u64']],WindowSettled:[['window','key'],['state','u8'],['raised','u64']],Claimed:[['window','key'],['wallet','key'],['tokens','u64'],['refund','u64']],BondSlashed:[['window','key'],['proof_hash','hash']]};
+let decoders;
+async function eventDecoders(){return decoders??=Promise.all(Object.entries(layouts).map(async([kind,fields])=>[(await hash('event:'+kind)).slice(0,16),kind,fields]))}
+export async function decodeEvents(tx,program){
+ requireThat(tx?.meta&&!tx.meta.err&&Number.isSafeInteger(tx.slot),'TRANSACTION','Only successful finalized transactions may be indexed.',409);
+ const keys=[...(tx.transaction?.message?.accountKeys||[]).map(k=>typeof k==='string'?k:k.pubkey),...(tx.meta.loadedAddresses?.writable||[]),...(tx.meta.loadedAddresses?.readonly||[])];
+ requireThat([...(tx.transaction?.message?.instructions||[]),...(tx.meta.innerInstructions||[]).flatMap(g=>g.instructions||[])].some(ix=>keys[ix.programIdIndex]===program),'PROGRAM_MISMATCH','Transaction did not invoke Floof.');
+ const schemas=await eventDecoders(),stack=[],events=[];
+ for(const [logIndex,line] of (tx.meta.logMessages||[]).entries()){
+  let match=/^Program (\w+) invoke \[(\d+)\]$/.exec(line);
+  if(match){const depth=Number(match[2]);requireThat(depth===stack.length+1,'LOGS','Incomplete invocation trace.',409);stack.push(match[1]);continue}
+  match=/^Program (\w+) (?:success|failed:.*)$/.exec(line);
+  if(match){requireThat(stack.pop()===match[1],'LOGS','Invalid invocation trace.',409);continue}
+  if(stack.at(-1)!==program||!line.startsWith('Program data: '))continue;
+  let data;try{data=fromBase64(line.slice(14))}catch{continue}
+  const spec=schemas.find(([tag])=>tag===hex(data.slice(0,8)));if(!spec)continue;
+  const [,kind,fields]=spec,body={};let off=8;const view=new DataView(data.buffer,data.byteOffset,data.byteLength);
+  for(const [name,type]of fields){const size=['key','hash'].includes(type)?32:type==='u8'?1:8;requireThat(off+size<=data.length,'EVENT','Truncated Floof event.',409);body[name]=type==='key'?base58encode(data.slice(off,off+32)):type==='hash'?hex(data.slice(off,off+32)):type==='u8'?data[off]:(type==='i64'?view.getBigInt64(off,true):view.getBigUint64(off,true)).toString();off+=size}
+  requireThat(off===data.length,'EVENT_VERSION','Unknown Floof event layout.',409);events.push({logIndex,kind,...body});
+ }
+ requireThat(stack.length===0,'LOGS','Truncated invocation trace. Retry from an archival RPC.',409);return events;
+}
+export async function ingestFinalized(db,signature,tx,program,now){
+ const events=await decodeEvents(tx,program);
+ // Raw record and event rows commit atomically. Replay repairs missing event rows without duplicates.
+ const statements=[db.prepare('INSERT OR IGNORE INTO indexed_transactions (signature,slot,block_time,program_id,body,indexed_at) VALUES (?,?,?,?,?,?)').bind(signature,tx.slot,tx.blockTime,program,JSON.stringify(tx),now),...events.map(e=>db.prepare('INSERT OR IGNORE INTO chain_events (signature,log_index,slot,program_id,window,kind,body,indexed_at) VALUES (?,?,?,?,?,?,?,?)').bind(signature,e.logIndex,tx.slot,program,e.window,e.kind,JSON.stringify(e),now))];
+ const results=await db.batch(statements);return {inserted:results[0].meta.changes,events:results.slice(1).reduce((n,r)=>n+r.meta.changes,0)};
+}
+export async function chainWindow(db,program,window){
+ const rows=await db.prepare('SELECT signature,slot,body FROM chain_events WHERE program_id=? AND window=? ORDER BY slot,signature,log_index LIMIT 1001').bind(program,window).all();
+ requireThat(rows.results.length<=1000,'HISTORY_LIMIT','Window projection exceeds the inline history limit.',503);
+ // Cross-transaction order inside a slot is not guessed. Pledged total is the maximum
+ // cumulative on-chain total, claims are per-wallet and lifecycle is monotonic.
+ const projection={window,program,network:'devnet',source:'finalized-chain-events',created:null,pledgedLamports:'0',settlement:null,claims:[],slash:null,events:rows.results.length};
+ for(const row of rows.results){const e=JSON.parse(row.body),evidence={signature:row.signature,slot:row.slot};
+  if(e.kind==='WindowCreated')projection.created={...e,...evidence};
+  if(e.kind==='Pledged'&&BigInt(e.total)>BigInt(projection.pledgedLamports))projection.pledgedLamports=e.total;
+  if(e.kind==='WindowSettled')projection.settlement={...e,...evidence};
+  if(e.kind==='Claimed')projection.claims.push({...e,...evidence});
+  if(e.kind==='BondSlashed')projection.slash={...e,...evidence};
+ }return projection;
+}

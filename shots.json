@@ -1,0 +1,556 @@
+[
+ {
+  "name": "00-preloader-desktop",
+  "vp": "d",
+  "preload": true,
+  "wait": 900
+ },
+ {
+  "name": "01-landing-hero-desktop",
+  "vp": "d",
+  "wait": 4500,
+  "actions": [
+   {
+    "mouse": [
+     1250,
+     300
+    ]
+   },
+   {
+    "wait": 700
+   },
+   {
+    "mouse": [
+     1439,
+     899
+    ]
+   }
+  ]
+ },
+ {
+  "name": "01-landing-hero-mobile",
+  "vp": "m",
+  "wait": 4500
+ },
+ {
+  "name": "01b-landing-story-beat1-desktop",
+  "vp": "d",
+  "actions": [
+   {
+    "eval": "window.scrollTo(0, innerHeight*1.35)"
+   },
+   {
+    "wait": 1800
+   }
+  ]
+ },
+ {
+  "name": "01b-landing-story-beat3-desktop",
+  "vp": "d",
+  "actions": [
+   {
+    "eval": "window.scrollTo(0, innerHeight*3.4)"
+   },
+   {
+    "wait": 1800
+   }
+  ]
+ },
+ {
+  "name": "01b-landing-story-beat2-mobile",
+  "vp": "m",
+  "actions": [
+   {
+    "eval": "window.scrollTo(0, innerHeight*2.6)"
+   },
+   {
+    "wait": 1800
+   }
+  ]
+ },
+ {
+  "name": "01c-landing-stats-compare-desktop",
+  "vp": "d",
+  "actions": [
+   {
+    "eval": "window.scrollTo(0, document.querySelector('section[aria-label]').offsetTop + document.querySelector('section[aria-label]').offsetHeight)"
+   },
+   {
+    "wait": 1800
+   }
+  ]
+ },
+ {
+  "name": "01d-landing-full-desktop",
+  "vp": "d",
+  "full": true,
+  "actions": [
+   {
+    "eval": "window.scrollTo(0, 99999)"
+   },
+   {
+    "wait": 1200
+   },
+   {
+    "eval": "window.scrollTo(0,0)"
+   },
+   {
+    "wait": 600
+   }
+  ]
+ },
+ {
+  "name": "02-explore-desktop",
+  "vp": "d",
+  "path": "/explore"
+ },
+ {
+  "name": "02-explore-mobile",
+  "vp": "m",
+  "path": "/explore"
+ },
+ {
+  "name": "02b-explore-list-filtered-desktop",
+  "vp": "d",
+  "path": "/explore",
+  "actions": [
+   {
+    "click": "button:has-text('On curve')"
+   },
+   {
+    "click": "button:has-text('list')"
+   },
+   {
+    "click": "button:has-text('A+')"
+   },
+   {
+    "wait": 800
+   }
+  ]
+ },
+ {
+  "name": "03-create-details-desktop",
+  "vp": "d",
+  "path": "/create"
+ },
+ {
+  "name": "03-create-details-mobile",
+  "vp": "m",
+  "path": "/create"
+ },
+ {
+  "name": "03b-create-validation-desktop",
+  "vp": "d",
+  "path": "/create",
+  "actions": [
+   {
+    "fill": [
+     "input[placeholder='MOCHI']",
+     "MOCHI"
+    ]
+   },
+   {
+    "click": "button:has-text('Continue')"
+   },
+   {
+    "wait": 600
+   }
+  ]
+ },
+ {
+  "name": "03c-create-window-desktop",
+  "vp": "d",
+  "path": "/create",
+  "actions": [
+   {
+    "fill": [
+     "input[placeholder='Mochi Mochi']",
+     "Puffy Pudding"
+    ]
+   },
+   {
+    "fill": [
+     "input[placeholder='MOCHI']",
+     "PUDDING"
+    ]
+   },
+   {
+    "fill": [
+     "textarea",
+     "Wobbly dessert floof. Fair-launched, bond locked."
+    ]
+   },
+   {
+    "click": "button:has-text('Continue')"
+   },
+   {
+    "wait": 600
+   },
+   {
+    "fill": [
+     "input[inputmode=decimal] >> nth=1",
+     "5"
+    ]
+   },
+   {
+    "wait": 400
+   }
+  ]
+ },
+ {
+  "name": "03d-create-review-desktop",
+  "vp": "d",
+  "path": "/create",
+  "actions": [
+   {
+    "fill": [
+     "input[placeholder='Mochi Mochi']",
+     "Puffy Pudding"
+    ]
+   },
+   {
+    "fill": [
+     "input[placeholder='MOCHI']",
+     "PUDDING"
+    ]
+   },
+   {
+    "click": "button:has-text('Continue')"
+   },
+   {
+    "wait": 500
+   },
+   {
+    "click": "button:has-text('Continue')"
+   },
+   {
+    "wait": 500
+   },
+   {
+    "click": "button:has-text('Continue')"
+   },
+   {
+    "wait": 600
+   }
+  ]
+ },
+ {
+  "name": "03d-create-review-mobile",
+  "vp": "m",
+  "path": "/create",
+  "actions": [
+   {
+    "fill": [
+     "input[placeholder='Mochi Mochi']",
+     "Puffy Pudding"
+    ]
+   },
+   {
+    "fill": [
+     "input[placeholder='MOCHI']",
+     "PUDDING"
+    ]
+   },
+   {
+    "click": "button:has-text('Continue')"
+   },
+   {
+    "wait": 500
+   },
+   {
+    "click": "button:has-text('Continue')"
+   },
+   {
+    "wait": 500
+   },
+   {
+    "click": "button:has-text('Continue')"
+   },
+   {
+    "wait": 600
+   }
+  ]
+ },
+ {
+  "name": "04-coin-live-window-desktop",
+  "vp": "d",
+  "path": "/coin/mochi"
+ },
+ {
+  "name": "04-coin-live-window-mobile",
+  "vp": "m",
+  "path": "/coin/mochi"
+ },
+ {
+  "name": "04b-pledge-validation-desktop",
+  "vp": "d",
+  "path": "/coin/floof",
+  "actions": [
+   {
+    "fill": [
+     "input[aria-label='Pledge amount in SOL']",
+     "3"
+    ]
+   },
+   {
+    "wait": 500
+   }
+  ]
+ },
+ {
+  "name": "04c-pledge-confirm-desktop",
+  "vp": "d",
+  "path": "/coin/floof",
+  "actions": [
+   {
+    "fill": [
+     "input[aria-label='Pledge amount in SOL']",
+     "0.8"
+    ]
+   },
+   {
+    "click": "button:has-text('Pledge 0.8 SOL')"
+   },
+   {
+    "wait": 700
+   }
+  ]
+ },
+ {
+  "name": "04c-pledge-confirm-mobile",
+  "vp": "m",
+  "path": "/coin/floof",
+  "actions": [
+   {
+    "fill": [
+     "input[aria-label='Pledge amount in SOL']",
+     "0.8"
+    ]
+   },
+   {
+    "wait": 300
+   },
+   {
+    "eval": "(()=>{const b=[...document.querySelectorAll('button')].find(x=>x.textContent.trim().toLowerCase().startsWith(\"pledge 0.8\"));if(b){b.scrollIntoView({block:'center'});b.click()}})()"
+   },
+   {
+    "wait": 900
+   }
+  ]
+ },
+ {
+  "name": "05-poof-result-desktop",
+  "vp": "d",
+  "path": "/coin/mochi/poof",
+  "wait": 4000
+ },
+ {
+  "name": "05-poof-result-mobile",
+  "vp": "m",
+  "path": "/coin/mochi/poof",
+  "wait": 4000
+ },
+ {
+  "name": "06-trade-desktop",
+  "vp": "d",
+  "path": "/trade/puff"
+ },
+ {
+  "name": "06-trade-mobile",
+  "vp": "m",
+  "path": "/trade/puff"
+ },
+ {
+  "name": "06b-trade-buy-quote-desktop",
+  "vp": "d",
+  "path": "/trade/puff",
+  "actions": [
+   {
+    "fill": [
+     "input[aria-label='Amount']",
+     "0.5"
+    ]
+   },
+   {
+    "click": "button[aria-label='Slippage settings']"
+   },
+   {
+    "click": "button:has-text('2%')"
+   },
+   {
+    "wait": 600
+   }
+  ]
+ },
+ {
+  "name": "06c-trade-confirm-desktop",
+  "vp": "d",
+  "path": "/trade/puff",
+  "actions": [
+   {
+    "fill": [
+     "input[aria-label='Amount']",
+     "1.5"
+    ]
+   },
+   {
+    "wait": 300
+   },
+   {
+    "eval": "(()=>{const b=[...document.querySelectorAll('button')].find(x=>x.textContent.trim().toLowerCase().startsWith(\"buy $puff\"));if(b){b.scrollIntoView({block:'center'});b.click()}})()"
+   },
+   {
+    "wait": 1200
+   }
+  ]
+ },
+ {
+  "name": "06d-trade-after-buy-position-desktop",
+  "vp": "d",
+  "path": "/trade/puff",
+  "actions": [
+   {
+    "fill": [
+     "input[aria-label='Amount']",
+     "1.5"
+    ]
+   },
+   {
+    "click": "button:has-text('Buy $PUFF')"
+   },
+   {
+    "wait": 400
+   },
+   {
+    "click": "button:has-text('Sign buy')"
+   },
+   {
+    "wait": 1800
+   },
+   {
+    "click": "button:has-text('Done')"
+   },
+   {
+    "click": "button:has-text('Your position')"
+   },
+   {
+    "wait": 700
+   }
+  ]
+ },
+ {
+  "name": "06e-trade-sell-mobile",
+  "vp": "m",
+  "path": "/trade/puff",
+  "actions": [
+   {
+    "eval": "(()=>{const b=[...document.querySelectorAll('button')].find(x=>x.textContent.trim().toLowerCase().startsWith(\"sell\"));if(b){b.scrollIntoView({block:'center'});b.click()}})()"
+   },
+   {
+    "wait": 300
+   },
+   {
+    "eval": "(()=>{const b=[...document.querySelectorAll('button')].find(x=>x.textContent.trim().toLowerCase().startsWith(\"50%\"));if(b){b.scrollIntoView({block:'center'});b.click()}})()"
+   },
+   {
+    "wait": 400
+   },
+   {
+    "eval": "window.scrollTo(0, document.querySelector('input[aria-label=Amount]').getBoundingClientRect().top + scrollY - 260)"
+   },
+   {
+    "wait": 600
+   }
+  ]
+ },
+ {
+  "name": "07-portfolio-desktop",
+  "vp": "d",
+  "path": "/portfolio"
+ },
+ {
+  "name": "07-portfolio-mobile",
+  "vp": "m",
+  "path": "/portfolio"
+ },
+ {
+  "name": "07b-portfolio-tickets-desktop",
+  "vp": "d",
+  "path": "/portfolio",
+  "actions": [
+   {
+    "click": "button:has-text('Window tickets')"
+   },
+   {
+    "wait": 900
+   }
+  ]
+ },
+ {
+  "name": "07c-portfolio-claims-desktop",
+  "vp": "d",
+  "path": "/portfolio",
+  "actions": [
+   {
+    "click": "button:has-text('Claims')"
+   },
+   {
+    "wait": 700
+   }
+  ]
+ },
+ {
+  "name": "07d-portfolio-disconnected-mobile",
+  "vp": "m",
+  "path": "/portfolio",
+  "q": ""
+ },
+ {
+  "name": "08-creator-profile-desktop",
+  "vp": "d",
+  "path": "/creator/mochimaker"
+ },
+ {
+  "name": "08-creator-profile-mobile",
+  "vp": "m",
+  "path": "/creator/mochimaker"
+ },
+ {
+  "name": "09-truth-report-desktop",
+  "vp": "d",
+  "path": "/truth/sugar"
+ },
+ {
+  "name": "09-truth-report-mobile",
+  "vp": "m",
+  "path": "/truth/puff"
+ },
+ {
+  "name": "10-scouts-leaderboard-desktop",
+  "vp": "d",
+  "path": "/scouts"
+ },
+ {
+  "name": "10-scouts-leaderboard-mobile",
+  "vp": "m",
+  "path": "/scouts"
+ },
+ {
+  "name": "10b-docs-fees-desktop",
+  "vp": "d",
+  "path": "/docs",
+  "actions": [
+   {
+    "eval": "window.scrollTo(0, document.getElementById('fees').offsetTop - 80)"
+   },
+   {
+    "wait": 900
+   }
+  ]
+ },
+ {
+  "name": "10b-docs-fees-mobile",
+  "vp": "m",
+  "path": "/docs"
+ }
+]
