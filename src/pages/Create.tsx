@@ -39,11 +39,11 @@ export default function Create() {
   const [draftRevision, setDraftRevision] = useState(0)
   const [draftNote, setDraftNote] = useState('')
   const [checked, setChecked] = useState(false)
-  useEffect(() => { let active = true; api('/drafts/launch').then(d => {
+  useEffect(() => { if(!wallet){setDraftReady(true);setDraftNote('Connect your wallet to save and restore drafts.');return} let active = true; setDraftReady(false); api('/drafts/launch').then(d => {
     if (!active) return
     if (d.form) { setF({ ...init, ...d.form }); setDraftNote('Saved draft restored') }
     setDraftRevision(d.revision)
-  }).catch(() => { if (active) setDraftNote('Draft storage unavailable. You can still create a launch.') }).finally(() => { if (active) setDraftReady(true) }); return () => { active = false } }, [])
+  }).catch(() => { if (active) setDraftNote('Draft storage unavailable. You can still create a launch.') }).finally(() => { if (active) setDraftReady(true) }); return () => { active = false } }, [wallet])
   const saveDraft = async () => { setSaving(true); try {
     const result = await api('/drafts/launch', { form: f, revision: draftRevision })
     setDraftRevision(result.revision); setDraftNote('Draft saved. Come back whenever you’re ready.')
@@ -116,7 +116,7 @@ export default function Create() {
       <p className="mt-2 font-bold text-lav">Set up your coin, its fair window and your bond. Snipers not invited.</p>
       <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-xs font-bold text-lav">
         <span role="status">{draftNote || 'Your logo, your token. Launch settings are fixed after creation.'}</span>
-        <button className="btn-ghost !px-3 !py-2 !text-xs" onClick={saveDraft} disabled={saving || uploading || !draftReady}>{saving ? 'Saving…' : 'Save draft'}</button>
+        <button className="btn-ghost !px-3 !py-2 !text-xs" onClick={saveDraft} disabled={!wallet || saving || uploading || !draftReady}>{saving ? 'Saving…' : 'Save draft'}</button>
       </div>
       {/* stepper */}
       <div className="mt-6 flex gap-2" role="list">
