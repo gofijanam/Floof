@@ -1,0 +1,36 @@
+{
+  "origin": "https://floof-web-production.up.railway.app",
+  "wallet": "8r7MGNUGP6mDDoGuXZwT1BTBSYxwYgC43rER4WjNEU3Z",
+  "network": "devnet",
+  "steps": {
+    "buy": {
+      "id": "d67a58b7-5609-4f41-9f44-1c082a71810d",
+      "signature": "4Mducdc5Ja699PqFXpa9aFvNbXXLgkz6FL91QhnT5LuxeFMTgn6Sdj5KbuRNgUtEpZGYnmjvqiSPEWkUdwWYUGKA",
+      "quote": {
+        "side": "buy",
+        "amount": "1000000",
+        "output": "246467095414",
+        "feeLamports": "10000",
+        "minimumOut": "244002424459",
+        "slippageBps": 100
+      },
+      "confirmed": true,
+      "slot": 519934347
+    },
+    "sell": {
+      "id": "064a35ce-3769-4d94-ad2c-a470a24a38ca",
+      "signature": "63AfwkWcagYy8jiH81tf476FGVvo7FtstbXihU9SnTcMLKSbD411A5uKvG23TTq8yENcgFXMauowvnGv96Xptm5C",
+      "quote": {
+        "side": "sell",
+        "amount": "123233547707",
+        "output": "490143",
+        "feeLamports": "4951",
+        "minimumOut": "485241",
+        "slippageBps": 100
+      },
+      "confirmed": true,
+      "slot": 519934487
+    }
+  },
+  "completedAt": "2026-11-08T06:43:48.861Z"
+}

@@ -1,0 +1,73 @@
+{
+  "deploymentId": "339e7897-d337-49d3-94b1-90f92cbec5ce",
+  "status": "SUCCESS",
+  "cycles": [
+    {
+      "timestamp": "2026-11-08T06:44:19.456571799Z",
+      "cycle": 1,
+      "tasks": {
+        "keeper": {
+          "ok": true,
+          "lastSuccess": 1794120255127
+        },
+        "indexer": {
+          "ok": true,
+          "lastSuccess": 1794120257050
+        },
+        "markets": {
+          "ok": false,
+          "error": "/indexer/scan: INTERNAL"
+        },
+        "scouts": {
+          "ok": true,
+          "lastSuccess": 1794120259448
+        }
+      }
+    },
+    {
+      "timestamp": "2026-11-08T06:45:19.374101523Z",
+      "cycle": 2,
+      "tasks": {
+        "keeper": {
+          "ok": true,
+          "lastSuccess": 1794120296137
+        },
+        "indexer": {
+          "ok": true,
+          "lastSuccess": 1794120298128
+        },
+        "markets": {
+          "ok": true,
+          "lastSuccess": 1794120311702
+        },
+        "scouts": {
+          "ok": true,
+          "lastSuccess": 1794120311702
+        }
+      }
+    },
+    {
+      "timestamp": "2026-11-08T06:45:53.275722215Z",
+      "cycle": 3,
+      "tasks": {
+        "keeper": {
+          "ok": true,
+          "lastSuccess": 1794120348356
+        },
+        "indexer": {
+          "ok": true,
+          "lastSuccess": 1794120350368
+        },
+        "markets": {
+          "ok": true,
+          "lastSuccess": 1794120353229
+        },
+        "scouts": {
+          "ok": true,
+          "lastSuccess": 1794120353229
+        }
+      }
+    }
+  ],
+  "note": "Public RPC 429 retries occurred. Initial markets task failed; subsequent cycles 2 and 3 passed all four tasks. Successful scouts checks do not imply a funded weekly distribution."
+}

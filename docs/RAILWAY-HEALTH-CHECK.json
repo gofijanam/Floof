@@ -1,0 +1,27 @@
+[
+  {
+    "path": "/api/health",
+    "status": 200,
+    "data": {
+      "ok": true,
+      "service": "floof-api",
+      "version": "0.4.0",
+      "mode": "devnet",
+      "chainExecution": true,
+      "storage": "SQLite persistent volume",
+      "authMode": "wallet"
+    }
+  },
+  {
+    "path": "/api/state",
+    "status": 200,
+    "data": {
+      "mode": "devnet",
+      "coins": 2,
+      "pledgers": [
+        10,
+        1
+      ]
+    }
+  }
+]

@@ -2,7 +2,7 @@
 
 The web service runs the unchanged React design and API on Node 24. railway.json builds Dockerfile and starts scripts/service.mjs (web by default). A single persistent volume at /data holds floof.sqlite (WAL), wallet sessions, migration ledger and uploaded images/metadata. Keep one replica; scaling requires a database migration. The existing Sites sandbox remains separate and is not silently overwritten.
 
-APP_ORIGIN must be the exact HTTPS origin; PORT=3000, DATA_DIR=/data. CHAIN_EXECUTION=devnet activates the deployed Devnet program. Set FLOOF_PROGRAM_ID, SOLANA_DEVNET_RPC_URL, ATTESTOR_PKCS8_BASE64, INDEXER_SECRET and ADMIN_SECRET as service variables. Never put signer secrets in client builds or Git.
+APP_ORIGIN must be the exact HTTPS origin; PORT=3000, DATA_DIR=/data. CHAIN_EXECUTION=devnet activates the deployed Devnet program. Set FLOOF_PROGRAM_ID, SOLANA_DEVNET_RPC_URL, optional SOLANA_DEVNET_ARCHIVE_RPC_URL, ATTESTOR_PKCS8_BASE64, INDEXER_SECRET and ADMIN_SECRET as service variables. Never put signer secrets in client builds or Git.
 
 Railway uses wallet-signature login with one-use, expiring, origin-bound challenges and revocable opaque HttpOnly/Secure/SameSite cookies. Client identity headers are discarded. The former Sites identity header is populated only after the server validates its own session. No local-preview identity or QA signer is shipped.
 

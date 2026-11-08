@@ -1,0 +1,141 @@
+{
+  "/api/indexer/checkpoint?name=events-v2": {
+    "cursor": {
+      "head": "3hiCCCUXrfnrjBNQE9LARDMQfuT4cHU5R9MMy4bF6aUtYUFj7YWBZGPSsy1zzAtywkrVxzb3R5NbamechmBkwWtA",
+      "complete": true
+    },
+    "updated_at": 1794120176907
+  },
+  "/api/chain/windows/54cbwxBpcHFZ5jMqc2zs5hjrtZaMAJgoKRuemsJJbG3L": {
+    "window": "54cbwxBpcHFZ5jMqc2zs5hjrtZaMAJgoKRuemsJJbG3L",
+    "program": "7hhrC7N6FRQyQLUbr4q9q5Dgqgj8zoDtDCiCd8m1XX3N",
+    "network": "devnet",
+    "source": "finalized-chain-events",
+    "created": {
+      "logIndex": 14,
+      "kind": "WindowCreated",
+      "window": "54cbwxBpcHFZ5jMqc2zs5hjrtZaMAJgoKRuemsJJbG3L",
+      "creator": "3p2JxyqhPgFTGfdK2dAsKofX7bsp4PK2mSJy5YuSzLG1",
+      "mint": "HLUBz6TD9XMhpeFFobwrx3tJ53xDx9Gz1rCntqLmzeGf",
+      "end": "1794114724",
+      "signature": "5dHYvdidhFYX7Bg8zuDDy6beF599tzfWFKuydhDwu5xE7cBzGmVGUXe5QdkGuNcBnUtBkTbTjxtqGy9zpNPJ8Acn",
+      "slot": 519908831
+    },
+    "pledgedLamports": "1000000000",
+    "settlement": {
+      "logIndex": -1,
+      "kind": "WindowSettled",
+      "window": "54cbwxBpcHFZ5jMqc2zs5hjrtZaMAJgoKRuemsJJbG3L",
+      "state": 1,
+      "raised": "1000000000",
+      "evidence": "finalized-account-recovery",
+      "accountSlot": 519933271,
+      "signature": "2qX3wHMfmwK2sDxP71A4nZinbdr8itUv2VTca2Ca3TJoCfCkWUgxp4PyCD3sKc9fNUpuvJTEpKzQt8fw5g6uQ3ca",
+      "slot": 519911872
+    },
+    "claims": [
+      {
+        "logIndex": 24,
+        "kind": "Claimed",
+        "window": "54cbwxBpcHFZ5jMqc2zs5hjrtZaMAJgoKRuemsJJbG3L",
+        "wallet": "8r7MGNUGP6mDDoGuXZwT1BTBSYxwYgC43rER4WjNEU3Z",
+        "tokens": "40000000000000",
+        "refund": "0",
+        "signature": "3UdQTYH7ne5dFEw6cQKVJ3Nyc7H6cPmUMvJ2MLNegDgE4dcmTjojYj7ZsrmFApegGRGb1munyaxyU3BbcjbTXsLh",
+        "slot": 519912364
+      },
+      {
+        "logIndex": 24,
+        "kind": "Claimed",
+        "window": "54cbwxBpcHFZ5jMqc2zs5hjrtZaMAJgoKRuemsJJbG3L",
+        "wallet": "Dt1BRySKdvRsYXePXcJkm9m4R936RZ3ogNc1v4QVe4ns",
+        "tokens": "40000000000000",
+        "refund": "0",
+        "signature": "33B3g3YvGnh4qJz7ZqL4yt7EKieQY6FpH97nFjQTjbxLGZ4cZxmKwGgrg52NiUEAtnPZvpxmwyVV4V8HbaNaWqBD",
+        "slot": 519912626
+      },
+      {
+        "logIndex": 24,
+        "kind": "Claimed",
+        "window": "54cbwxBpcHFZ5jMqc2zs5hjrtZaMAJgoKRuemsJJbG3L",
+        "wallet": "DTy9bxmA1bJYhqv7FKRXpy5hFaSPdB9a86UzYsCR1GgU",
+        "tokens": "40000000000000",
+        "refund": "0",
+        "signature": "5rZVHEv72xQyT4BoNnrFcT3sCmnr1VCg2bguq1U6ncYp4G6E9cfyp3h8Whb3k8gT9V1Txbh5x6wpnE5HGdcbHEU",
+        "slot": 519914298
+      },
+      {
+        "logIndex": 24,
+        "kind": "Claimed",
+        "window": "54cbwxBpcHFZ5jMqc2zs5hjrtZaMAJgoKRuemsJJbG3L",
+        "wallet": "2QMhPJsW4qNUxACnCHDCzaD5SPxdc8q78YSNEavGNS5N",
+        "tokens": "40000000000000",
+        "refund": "0",
+        "signature": "3KaYatPfgKBqqooYxzUBPrw4qSM3A4yq6z6CrhqjLe49AmHfGg5e31nt6LuMtNDJno5T4XrVrgLAdTtEkxmGpVcZ",
+        "slot": 519914306
+      },
+      {
+        "logIndex": 24,
+        "kind": "Claimed",
+        "window": "54cbwxBpcHFZ5jMqc2zs5hjrtZaMAJgoKRuemsJJbG3L",
+        "wallet": "8mYBV2QBmBwNwowyVRSYJn2Hrjsf5CsUdqUn7CBuDSrD",
+        "tokens": "40000000000000",
+        "refund": "0",
+        "signature": "USCNZzYTKmVuvnC9LLDho4ua5WUh29FK3LKS8aZ333JyWEUWJEcSgK2sBxKrWomzgAZzYMKC4FGjZafhRHPJuy3",
+        "slot": 519914414
+      },
+      {
+        "logIndex": 24,
+        "kind": "Claimed",
+        "window": "54cbwxBpcHFZ5jMqc2zs5hjrtZaMAJgoKRuemsJJbG3L",
+        "wallet": "FYPvrtAKpShWWsaM6hixPPccLktkxVKwJPPhrVLxp5v5",
+        "tokens": "40000000000000",
+        "refund": "0",
+        "signature": "4K3bZGPBM9mCAVjQJHUdxEcv7nWeDnfPStxZSuW57UcLUtYfpvwLQTr8P3j5EFT3wUsXMNUxtKbXQqEUvHsxQCHE",
+        "slot": 519914422
+      },
+      {
+        "logIndex": 24,
+        "kind": "Claimed",
+        "window": "54cbwxBpcHFZ5jMqc2zs5hjrtZaMAJgoKRuemsJJbG3L",
+        "wallet": "DGU4qUzw7rqf1otVM4c69eP2SPaXCdQj9dRqTWZW16cu",
+        "tokens": "40000000000000",
+        "refund": "0",
+        "signature": "3Tt6CM5bqniZASfvEzfTqPwdScKv8nnwTUk2wAeLKgZrHY22swBqzu2MTMreVMCRgPq6r5wsPuraLYFyaFgzXLSL",
+        "slot": 519914431
+      },
+      {
+        "logIndex": 24,
+        "kind": "Claimed",
+        "window": "54cbwxBpcHFZ5jMqc2zs5hjrtZaMAJgoKRuemsJJbG3L",
+        "wallet": "5n66KaXArPpPncpYjhWpnRviPHNJYCfRoZKtK7FavMkU",
+        "tokens": "40000000000000",
+        "refund": "0",
+        "signature": "2sZF4YPDK9Tv2dEHghUR3pkeUucPpFAd7BCCg97iiN1TfuyaPA1jNFHzBoWUYb6TcHm5ENBN9DJb3EjXcCQXJcXd",
+        "slot": 519914438
+      },
+      {
+        "logIndex": 24,
+        "kind": "Claimed",
+        "window": "54cbwxBpcHFZ5jMqc2zs5hjrtZaMAJgoKRuemsJJbG3L",
+        "wallet": "4vrUqgvQ2QkqkkV8YdMSF7HHtsZgRDV2gQbWYKv3JJEV",
+        "tokens": "40000000000000",
+        "refund": "0",
+        "signature": "2HZXGLSfwNhnjC6xGH9mVrTxP28zS57zLaP8L83GwfjGqZ72Zv7UN9iWojCJMAZW7GCT8mq13XUcZksTDhet9BEd",
+        "slot": 519914446
+      },
+      {
+        "logIndex": 24,
+        "kind": "Claimed",
+        "window": "54cbwxBpcHFZ5jMqc2zs5hjrtZaMAJgoKRuemsJJbG3L",
+        "wallet": "XYoCHMS6Vza9XsKtt7KMmcpcz3SVzx8w42YQ8NWujY4",
+        "tokens": "40000000000000",
+        "refund": "0",
+        "signature": "5yBJye1JJdGNSqC1mmF8BS9ErvbmXh2QFLAxkH8vKMp1V9SeVFZov85egGrr7zHKh8118fUFc3GqcaqHYTVQcWek",
+        "slot": 519914454
+      }
+    ],
+    "slash": null,
+    "events": 22
+  }
+}

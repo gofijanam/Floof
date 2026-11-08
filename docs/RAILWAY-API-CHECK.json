@@ -1,0 +1,17 @@
+{
+  "at": "2026-11-08T06:38:04.757Z",
+  "origin": "https://floof-web-production.up.railway.app",
+  "checks": {
+    "spoofRejected": true,
+    "signedLogin": true,
+    "replayRejected": true,
+    "session": true,
+    "realWallet": true,
+    "devnet": true,
+    "positions": 2,
+    "windows": 2,
+    "crossOriginRejected": true,
+    "logout": true,
+    "revoked": true
+  }
+}
