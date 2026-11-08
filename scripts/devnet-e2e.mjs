@@ -5,7 +5,7 @@ import {Connection,Keypair,SystemProgram} from '@solana/web3.js';
 import {PROGRAM,pda,createIx,decodeWindow,pledgeIxs,pledgeMessage,settleIx,claimIxs,creatorIx,ata} from '../server/chain-client.mjs';
 import {decodePool,tradeQuote,tradeIxs} from '../server/launchlab-trade.mjs';
 import {sendOnce,assertDevnet} from './devnet-transactions.mjs';
-const c=new Connection(process.env.SOLANA_DEVNET_RPC_URL||'https://api.devnet.solana.com','confirmed');await assertDevnet(c);
+const c=new Connection(process.env.SOLANA_DEVNET_RPC_URL||'https://api.devnet.solana.com',{commitment:'confirmed',fetch:(u,o)=>fetch(u,{...o,signal:AbortSignal.timeout(20000)})});await assertDevnet(c);
 const load=n=>Keypair.fromSecretKey(Uint8Array.from(JSON.parse(fs.readFileSync(`.secrets/${n}.json`)))),admin=load('deployer'),attestor=load('attestor');
 fs.mkdirSync('.secrets/e2e',{recursive:true});const users=Array.from({length:10},(_,i)=>{const f=`.secrets/e2e/user-${i}.json`;if(!fs.existsSync(f))fs.writeFileSync(f,JSON.stringify([...Keypair.generate().secretKey]),{mode:0o600});return Keypair.fromSecretKey(Uint8Array.from(JSON.parse(fs.readFileSync(f))))});
 const file='.local/public-devnet-e2e.json',r=fs.existsSync(file)?JSON.parse(fs.readFileSync(file)):{network:'devnet',program:PROGRAM.toBase58(),transactions:{},checks:{}};

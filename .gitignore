@@ -17,3 +17,5 @@ test-ledger/
 /.secrets
 /node_modules
 /target
+
+/.preview

@@ -17,4 +17,6 @@ test('Scout hold points stop after transfer, count unclaimed allocation and boun
  assert.equal(earnedPoints({...base,claimedAt:day*2,movements:[]}),200n);
  assert.equal(earnedPoints({...base,early:false}),100n);
  assert.equal(earnedPoints({...base,graduatedAt:day/2}),300n);
+ assert.equal(earnedPoints({...base,weightedPledge:1500000000n}),150n,'only the early part of a pledge receives a multiplier');
+ assert.equal(earnedPoints({...base,graduatedAt:day/4,movements:[{time:0,delta:'100'},{time:day/2,delta:'-100'}]}),200n,'graduation uses holdings at graduation, not week end');
 });
