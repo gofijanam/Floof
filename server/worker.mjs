@@ -37,10 +37,11 @@ async function route(req,env,ctx){
  const u=new URL(req.url),p=u.pathname.replace(/^\/api/,'')||'/',now=Date.now(),user=req.headers.get('oai-authenticated-user-id'),id=user?await hash(`floof-account-v1:${user}`):null;
  if(req.method==='OPTIONS')return new Response(null,{status:204,headers:{Allow:'GET, POST, OPTIONS'}});
  if(req.method!=='GET'&&req.method!=='HEAD'){const origin=req.headers.get('Origin');requireThat(!origin||origin===u.origin,'ORIGIN','Cross-origin writes are not permitted.',403);requireThat(req.headers.get('Sec-Fetch-Site')!=='cross-site','ORIGIN','Cross-site writes are not permitted.',403)}
- if(p==='/health')return json({ok:!!env.DB,service:'floof-api',version:'0.4.0',mode:env.CHAIN_EXECUTION==='devnet'?'devnet':'sandbox',chainExecution:env.CHAIN_EXECUTION==='devnet',storage:env.DB?'D1':'missing'});
+ if(p==='/health')return json({ok:!!env.DB,service:'floof-api',version:'0.4.0',mode:env.CHAIN_EXECUTION==='devnet'?'devnet':'sandbox',chainExecution:env.CHAIN_EXECUTION==='devnet',storage:env.DB?(env.STORAGE_NAME||'D1'):'missing',authMode:env.AUTH_MODE||'sites'});
  if(p==='/qa-metadata.json'&&req.method==='GET')return json({name:'Floof Devnet QA',symbol:'FLQA',description:'Disposable Floof integration-test token on Solana Devnet. No monetary value.',image:new URL('/mochi/happy-512.webp',u.origin).href});
  requireThat(env.DB,'DATABASE_UNAVAILABLE','Database binding is unavailable.',503);
  const repo=new Repository(env.DB,()=>seedState(buildCoins(now),now));
+ if(p==='/session'&&req.method==='POST'&&env.AUTH_MODE==='wallet'&&env.AUTH_WALLET&&id){await repo.change(s=>{command(s,id,'connect',{},now);s.accounts[id].linkedWallet=env.AUTH_WALLET;return true});return json({connected:true,wallet:env.AUTH_WALLET});}
  if(p.startsWith('/indexer/')&&p!=='/indexer/webhook'){
   requireThat(env.INDEXER_SECRET&&req.headers.get('Authorization')===`Bearer ${env.INDEXER_SECRET}`,'FORBIDDEN','Invalid indexer authorization.',403);
   if(p==='/indexer/checkpoint'){

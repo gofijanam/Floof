@@ -1,18 +1,15 @@
-# Floof Devnet jobs on Railway
+# Floof on Railway
 
-The repository's railway.json builds dependencies with npm ci --omit=dev and starts node scripts/jobs-service.mjs. Use one always-on replica. Health endpoint: /health; PORT is provided by Railway. This service performs jobs only; the existing Sites Worker owns the web/API and durable D1 data.
+The web service runs the unchanged React design and API on Node 24. railway.json builds Dockerfile and starts scripts/service.mjs (web by default). A single persistent volume at /data holds floof.sqlite (WAL), wallet sessions, migration ledger and uploaded images/metadata. Keep one replica; scaling requires a database migration. The existing Sites sandbox remains separate and is not silently overwritten.
 
-Required variables:
+APP_ORIGIN must be the exact HTTPS origin; PORT=3000, DATA_DIR=/data. CHAIN_EXECUTION=devnet activates the deployed Devnet program. Set FLOOF_PROGRAM_ID, SOLANA_DEVNET_RPC_URL, ATTESTOR_PKCS8_BASE64, INDEXER_SECRET and ADMIN_SECRET as service variables. Never put signer secrets in client builds or Git.
 
-| Name | Value / handling |
-| --- | --- |
-| FLOOF_API_ORIGIN | https://floof-fair-launch.gofivahootan.chatgpt.site |
-| SOLANA_DEVNET_RPC_URL | A working HTTPS Solana Devnet RPC endpoint; protect any API key |
-| INDEXER_SECRET | Must match the existing Sites secret; set only as a secret variable |
-| KEEPER_KEYPAIR_JSON | Disposable funded keeper JSON array from the private handoff |
-| DISTRIBUTOR_KEYPAIR_JSON | Devnet platform-fee owner JSON array; private handoff only |
-| RAILPACK_NODE_VERSION | 24 |
+Railway uses wallet-signature login with one-use, expiring, origin-bound challenges and revocable opaque HttpOnly/Secure/SameSite cookies. Client identity headers are discarded. The former Sites identity header is populated only after the server validates its own session. No local-preview identity or QA signer is shipped.
 
-Runtime signers are written to ignored .secrets files. Scan cursors and pending reward manifests use authenticated Worker endpoints backed by D1. Keep one replica to prevent competing jobs. The HTTP health endpoint is healthy only after a successful cycle; do not disable it merely to hide RPC/indexing failures.
+The jobs service sets FLOOF_ROLE=jobs with the same source/image and one always-on replica. Set FLOOF_API_ORIGIN to the Railway web origin, matching INDEXER_SECRET, SOLANA_DEVNET_RPC_URL, KEEPER_KEYPAIR_JSON and DISTRIBUTOR_KEYPAIR_JSON. It performs permissionless settlement, finalized transaction indexing, market history scans and fee-funded Scout processing. It independently reports each task's state. /health requires recent indexing success; market/scout errors are separately visible and do not prevent indexing progress. Durable cursors and reward manifests use authenticated web API endpoints.
 
-Provisioning attempted on 2026-11-08 was rejected by Railway's free-plan resource limit. A config file is not evidence of a running service. Before deployment, verify account capacity and that the hosted Worker can query Devnet. Attach the GitHub main branch, set the variables, deploy, and verify both health and advancing durable cursors. Never expose an administrative signer in the browser.
+All execution is Devnet-only. Mainnet deployment, independent contract audit and real Raydium migration validation are separate release gates. A successful host healthcheck alone does not establish these gates or prove all market history is complete.
+
+## Data recovery
+
+Stop jobs and the web writer before copying /data. Preserve SQLite together with any WAL file or use SQLite's backup API. Restore into a fresh volume before starting the web process. Migrations are recorded transactionally and are not reapplied on restart. Preserve the attestor configuration and associated Devnet program. Keep API credentials private. The previous Paperhands/Quiver recovery archive is separate from Floof source.

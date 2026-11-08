@@ -1,0 +1,11 @@
+.git
+node_modules
+dist
+.secrets
+.local
+.preview
+target
+test-ledger
+.env*
+*.zip
+*.tar.gz
