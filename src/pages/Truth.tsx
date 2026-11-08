@@ -17,13 +17,13 @@ export default function Truth() {
   const [q, setQ] = useState(ca ?? '')
   const coin = coins.find((c) => c.ca === ca || c.ticker.toLowerCase() === (ca ?? '').toLowerCase().replace('$', ''))
   const result = useApi<any>(ca ? `/truth/${encodeURIComponent(ca)}` : null)
-  const report = result.data?.grade ? result.data : null
+  const report = result.data?.status !== 'unavailable' ? result.data : null
   const nodes = useMemo(() => (report?.clusters?.nodes || []).map((node: any, i: number, list: any[]) => ({...node,x:300+220*Math.cos(i/list.length*Math.PI*2),y:140+100*Math.sin(i/list.length*Math.PI*2),fake:node.linked,r:6})),[report])
   return (
     <div className="relative mx-auto max-w-[1200px] px-4 pt-24 md:px-6 md:pt-28">
       <PeekMochi src="idle" />
       <div className="flex items-center gap-3"><span className="grid h-12 w-12 place-items-center rounded-2xl bg-mint/15 text-mint"><IShield s={26} /></span><h1 className="h-display text-5xl md:text-6xl">TRUTH</h1></div>
-      <p className="mt-2 max-w-2xl font-bold text-lav">Inspect recorded activity and account links. Sandbox scores are heuristics; external Solana tokens require a connected chain indexer.</p>
+      <p className="mt-2 max-w-2xl font-bold text-lav">Inspect token controls, recorded trades and funding links. Scores are evidence-based heuristics, not a guarantee of safety.</p>
       <form onSubmit={(e) => { e.preventDefault(); if (q.trim()) nav(`/truth/${encodeURIComponent(q.trim())}`) }} className="glass mt-5 flex items-center gap-2 rounded-full p-2" data-cursor="native">
         <IExplore s={18} className="ml-3 text-lav" />
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Contract address or $TICKER" className="flex-1 bg-transparent px-2 py-2 font-num text-base outline-none placeholder:text-lav/50" aria-label="Contract address" />
@@ -32,7 +32,7 @@ export default function Truth() {
       {result.error && <Card className="mt-4 p-4 text-danger">{result.error}</Card>}
       {ca && !result.data && !result.error && <div className="mt-5 font-bold text-lav">Loading report…</div>}
       {result.data?.status === 'unavailable' && <Card className="mt-5 p-5 font-bold text-lav">{result.data.reason}</Card>}
-      {report?.status === 'insufficient_data' && <Card className="mt-5 p-5 font-bold text-lav">Not enough evidence for a grade. {report.reason} No safety conclusion has been made.</Card>}
+      {(report?.status === 'insufficient_data'||report?.status === 'partial') && <Card className="mt-5 p-5 font-bold text-lav">Not enough evidence for a grade. {report.reason} No safety conclusion has been made.</Card>}
       {!report ? (
         <div className="mt-8">
           <div className="label mb-3">recently checked</div>
@@ -48,9 +48,9 @@ export default function Truth() {
             <CoinAvatar hue={report.hue} accessory={report.acc} size={72} className="mx-auto" />
             <div className="mt-2 font-display text-2xl font-extrabold">{report.name}</div>
             <div className="font-num text-xs text-lav tnum">{short(report.ca, 8)}</div>
-            <motion.div initial={{ scale: 0, rotate: -30 }} animate={{ scale: 1, rotate: 0 }} transition={{ type: 'spring', stiffness: 260, damping: 12, delay: 0.15 }} className="mx-auto mt-5 w-fit"><GradeBadge g={report.grade as Grade} size="lg" /></motion.div>
-            <div className="mt-3 font-num text-lg font-semibold tnum">TRUTH score {report.score}/100</div>
-            <div className="mt-1 text-xs font-bold text-lav">Sandbox activity · {report.sampleSize} recorded trades · heuristic only</div>
+            <motion.div initial={{ scale: 0, rotate: -30 }} animate={{ scale: 1, rotate: 0 }} transition={{ type: 'spring', stiffness: 260, damping: 12, delay: 0.15 }} className="mx-auto mt-5 w-fit"><GradeBadge g={(report.grade||'N/A') as Grade} size="lg" /></motion.div>
+            <div className="mt-3 font-num text-lg font-semibold tnum">TRUTH score {report.score==null?'—':`${report.score}/100`}</div>
+            <div className="mt-1 text-xs font-bold text-lav">{report.source==='sandbox'?'Sandbox':'Devnet'} activity · {report.sampleSize||0} recorded trades · heuristic only</div>
           </Card>
           <div className="space-y-5" data-cursor="native">
             <Card className="p-5">
@@ -59,9 +59,9 @@ export default function Truth() {
                 <motion.div initial={{ width: 0 }} animate={{ width: `${report.realPct}%` }} transition={{ duration: 1 }} className="bg-gradient-to-r from-mint to-blue" />
                 <motion.div initial={{ width: 0 }} animate={{ width: `${100 - report.realPct}%` }} transition={{ duration: 1 }} className="bg-danger/80" />
               </div>
-              <div className="mt-2 flex justify-between text-sm font-extrabold"><span className="text-mint tnum">{report.realPct.toFixed(1)}% unflagged</span><span className="text-danger tnum">{(100 - report.realPct).toFixed(1)}% linked</span></div>
+              <div className="mt-2 flex justify-between text-sm font-extrabold"><span className="text-mint tnum">{report.grade?report.realPct.toFixed(1):'—'}% unflagged</span><span className="text-danger tnum">{report.grade?(100 - report.realPct).toFixed(1):'—'}% linked</span></div>
               <div className="mt-4 grid grid-cols-3 gap-3">
-                {[['Sybil clusters', report.sybilClusters], ['Wash volume', `${report.washPct.toFixed(1)}%`], ['Bundled at launch', 'Not verified']].map(([k, v]) => <div key={k as string} className="rounded-2xl bg-night/50 p-3"><div className="label">{k}</div><div className="mt-1 font-num text-lg font-semibold tnum">{v}</div></div>)}
+                {[['Sybil clusters', report.sybilClusters], ['Wash volume', report.grade?`${report.washPct.toFixed(1)}%`:'Not verified'], ['Bundled at launch', 'Not verified']].map(([k, v]) => <div key={k as string} className="rounded-2xl bg-night/50 p-3"><div className="label">{k}</div><div className="mt-1 font-num text-lg font-semibold tnum">{v}</div></div>)}
               </div>
             </Card>
             <Card className="p-5">

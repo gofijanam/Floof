@@ -5,14 +5,16 @@ import {Transaction,ComputeBudgetProgram} from '@solana/web3.js';
 import {requireThat} from './errors.mjs';
 import {hash} from './crypto.mjs';
 import {verifiedConfig,rpcClient,fetchWindow} from './chain-rpc.mjs';
-import {key,creatorIx,createIx,pledgeIxs,claimIxs,settleIx,instruction,meta} from './chain-client.mjs';
+import {key,creatorIx,createIx,pledgeIxs,claimIxs,settleIx,instruction,meta,rewardClaimIx} from './chain-client.mjs';
 import {walletEvidence,checkEligibility,clusterFor,signPledge} from './sybil-service.mjs';
 import {ingestFinalized} from './chain-indexer.mjs';
 const integer=(v,name)=>{requireThat(/^(0|[1-9]\d*)$/.test(String(v))&&BigInt(v)<=0xffffffffffffffffn,'AMOUNT',`${name} must be an unsigned base-unit integer.`);return BigInt(v)};
 export async function prepareChain(env,db,owner,wallet,b,now=Date.now()){
  const rpc=rpcClient(env),config=await verifiedConfig(env,rpc);requireThat(!config.paused,'PAUSED','Devnet execution is paused.',503);let ixs,expected={};
- const allowed=['create','pledge','claim','settle','abort','reserve','bond','vested','creator-fees','buy','sell'];requireThat(allowed.includes(b.action),'ACTION','Unsupported chain action.');
- if(b.action==='create'){
+ const allowed=['create','pledge','claim','settle','abort','reserve','bond','vested','creator-fees','buy','sell','scout'];requireThat(allowed.includes(b.action),'ACTION','Unsupported chain action.');
+ if(b.action==='scout'){
+  const epoch=integer(b.epoch,'epoch'),row=await db.prepare('SELECT manifest FROM chain_distributions WHERE program=? AND epoch=?').bind(config.program,String(epoch)).first();requireThat(row,'REWARDS','No funded epoch found.',404);const manifest=JSON.parse(row.manifest),leaf=manifest.leaves.find(l=>l.wallet===wallet);requireThat(leaf,'REWARDS','This wallet has no allocation in this epoch.',404);ixs=[await rewardClaimIx(wallet,epoch,leaf.amount,leaf.proof)];expected={epoch:String(epoch),rewardLamports:leaf.amount};
+ }else if(b.action==='create'){
   const v=b.params||{},start=integer(v.start,'start');requireThat(start>=BigInt(Math.floor(now/1000))&&start<=BigInt(Math.floor(now/1000)+86400),'TIME','Choose a start within the next 24 hours.');
   requireThat(typeof v.name==='string'&&Buffer.byteLength(v.name)>=2&&Buffer.byteLength(v.name)<=32&&typeof v.symbol==='string'&&/^[A-Za-z0-9]{2,10}$/.test(v.symbol),'METADATA','Invalid token name or symbol.');
   let uri;try{uri=new URL(v.uri)}catch{}requireThat(uri?.protocol==='https:'&&!uri.username&&!uri.password&&Buffer.byteLength(v.uri)<=200,'METADATA','Use an HTTPS metadata URI of at most 200 bytes.');

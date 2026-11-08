@@ -13,3 +13,7 @@ target/
 
 .secrets/
 test-ledger/
+/.local
+/.secrets
+/node_modules
+/target

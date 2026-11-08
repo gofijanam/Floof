@@ -11,6 +11,7 @@ import { fmtCompact, fmtPrice, SOL_USD } from '../lib/format'
 import { ITrophy, IArrow, ICheck } from '../components/icons'
 
 export default function Portfolio() {
+  const mode=useStore(s=>s.mode)
   const MY_TICKETS = useStore(s => s.tickets)
   const address = useStore(s => s.walletAddress)
   const scout = useStore(s => s.scouts.find(r => r.me))
@@ -25,6 +26,7 @@ export default function Portfolio() {
   const [claimId, setClaimId] = useState<string | null>(null)
   const rows = Object.entries(positions).filter(([, p]) => p.tokens > 0).map(([id, p]) => { const c = coins.find((x) => x.id === id)!; const value = p.tokens * c.price; return { c, ...p, value, pnl: value - p.cost } })
   const totalValue = rows.reduce((a, r) => a + r.value, 0)
+  const allCostsKnown=rows.every(r=>r.costKnown!==false)
   const totalPnl = rows.reduce((a, r) => a + r.pnl, 0)
   const unclaimed = claims.filter((c) => !c.claimed).reduce((a, c) => a + c.amount, 0)
   const pendingClaim = claims.find((c) => c.id === claimId)
@@ -32,20 +34,20 @@ export default function Portfolio() {
     <div className="mx-auto max-w-xl px-4 pt-36 text-center">
       <img src="./mochi/sleepy-512.webp" alt="sleepy mochi" className="mx-auto w-44 anim-breathe" />
       <h1 className="h-display mt-4 text-5xl">Your floof pouch</h1>
-      <p className="mt-2 font-bold text-lav">Open your sandbox wallet to see positions, window tickets, Scout rewards and claims.</p>
-      <Magnetic className="mt-6"><button onClick={connectWallet} className="btn-candy px-8 py-4">Open sandbox</button></Magnetic>
+      <p className="mt-2 font-bold text-lav">Connect your wallet to see positions, window tickets, Scout rewards and claims.</p>
+      <Magnetic className="mt-6"><button onClick={connectWallet} className="btn-candy px-8 py-4">{mode==='devnet'?'Connect Phantom':'Open sandbox'}</button></Magnetic>
     </div>
   )
   return (
     <div className="relative mx-auto max-w-[1300px] px-4 pt-24 md:px-6 md:pt-28">
       <PeekMochi src="happy" />
       <div className="flex flex-wrap items-end justify-between gap-4">
-        <div><h1 className="h-display text-5xl md:text-6xl">Portfolio</h1><div className="mt-1 font-num text-sm text-lav tnum">{ME.wallet.slice(0, 8)}…{ME.wallet.slice(-6)} · sandbox</div></div>
+        <div><h1 className="h-display text-5xl md:text-6xl">Portfolio</h1><div className="mt-1 font-num text-sm text-lav tnum">{ME.wallet.slice(0, 8)}…{ME.wallet.slice(-6)} · {mode}</div></div>
         <Link to="/scouts" className="chip py-2 text-blue"><ITrophy s={14} /> Scout rank #{ME.scoutRank} · {ME.scoutPoints.toLocaleString()} pts</Link>
       </div>
       <div className="mt-6 grid grid-cols-2 gap-3 md:grid-cols-4">
         <Card className="p-5"><div className="label">holdings value</div><div className="mt-1 font-num text-3xl font-semibold tnum"><Num v={totalValue} d={3} /> <span className="text-sm text-lav">SOL</span></div><div className="text-xs font-bold text-lav tnum">≈ ${(totalValue * SOL_USD).toFixed(0)}</div></Card>
-        <Card className="p-5"><div className="label">unrealised PnL</div><div className={cx('mt-1 font-num text-3xl font-semibold tnum', totalPnl >= 0 ? 'text-mint' : 'text-danger')}>{totalPnl >= 0 ? '+' : ''}<Num v={totalPnl} d={3} /></div><div className="text-xs font-bold text-lav">SOL across {rows.length} coins</div></Card>
+        <Card className="p-5"><div className="label">unrealised PnL</div><div className={cx('mt-1 font-num text-3xl font-semibold tnum', totalPnl >= 0 ? 'text-mint' : 'text-danger')}>{allCostsKnown?<>{totalPnl >= 0 ? '+' : ''}<Num v={totalPnl} d={3} /></>:'—'}</div><div className="text-xs font-bold text-lav">SOL across {rows.length} coins</div></Card>
         <Card className="p-5"><div className="label">wallet</div><div className="mt-1 font-num text-3xl font-semibold tnum">{sol.toFixed(2)}</div><div className="text-xs font-bold text-lav">SOL available</div></Card>
         <Card neon="p" className="p-5"><div className="label">claimable</div><div className="mt-1 font-num text-3xl font-semibold text-pink tnum">{unclaimed.toFixed(3)}</div><div className="text-xs font-bold text-lav">SOL refunds + Scout rewards</div></Card>
       </div>
@@ -60,9 +62,9 @@ export default function Portfolio() {
                   <td className="px-4 py-3"><Link to={`/trade/${r.c.id}`} className="flex items-center gap-3 hover:text-pink"><CoinAvatar image={r.c.image} hue={r.c.hue} accessory={r.c.accessory} size={34} />${r.c.ticker}</Link></td>
                   <td className="px-4 font-num tnum">{fmtCompact(r.tokens, 2)}</td>
                   <td className="px-4 font-num tnum">{fmtPrice(r.c.price)}</td>
-                  <td className="px-4 font-num tnum">{r.cost.toFixed(3)}</td>
+                  <td className="px-4 font-num tnum">{r.costKnown===false?'Unknown':r.cost.toFixed(3)}</td>
                   <td className="px-4 font-num tnum">{r.value.toFixed(3)}</td>
-                  <td className={cx('px-4 font-num tnum', r.pnl >= 0 ? 'text-mint' : 'text-danger')}>{r.pnl >= 0 ? '+' : ''}{r.pnl.toFixed(3)} <span className="text-xs">({((r.pnl / r.cost) * 100).toFixed(0)}%)</span></td>
+                  <td className={cx('px-4 font-num tnum', r.pnl >= 0 ? 'text-mint' : 'text-danger')}>{r.costKnown===false?'—':<>{r.pnl >= 0 ? '+' : ''}{r.pnl.toFixed(3)} {r.cost>0&&<span className="text-xs">({((r.pnl / r.cost) * 100).toFixed(0)}%)</span>}</>}</td>
                   <td className="px-4 text-right"><Link to={`/trade/${r.c.id}`} className="btn-ghost px-3 py-1.5 text-xs">Trade</Link></td>
                 </tr>
               ))}</tbody>

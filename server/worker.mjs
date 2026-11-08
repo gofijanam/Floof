@@ -1,4 +1,10 @@
-import {chainTruth} from './chain-truth.mjs';
+import {chainTruth,indexedTruth} from './chain-truth.mjs';
+import {scanMarket} from './market-history.mjs';
+import {scoutSnapshot} from './scout-points.mjs';
+import {rpcClient,verifiedConfig} from './chain-rpc.mjs';
+import {PROGRAM,pda,u64,discriminator} from './chain-client.mjs';
+import {scoutTree} from './scout-merkle.mjs';
+import {Buffer} from 'buffer';
 import {chainSnapshot} from './chain-state.mjs';
 import {prepareChain,confirmChain} from './chain-service.mjs';
 import {ingestFinalized,chainWindow} from './chain-indexer.mjs';
@@ -31,9 +37,28 @@ async function route(req,env,ctx){
  const u=new URL(req.url),p=u.pathname.replace(/^\/api/,'')||'/',now=Date.now(),user=req.headers.get('oai-authenticated-user-id'),id=user?await hash(`floof-account-v1:${user}`):null;
  if(req.method==='OPTIONS')return new Response(null,{status:204,headers:{Allow:'GET, POST, OPTIONS'}});
  if(req.method!=='GET'&&req.method!=='HEAD'){const origin=req.headers.get('Origin');requireThat(!origin||origin===u.origin,'ORIGIN','Cross-origin writes are not permitted.',403);requireThat(req.headers.get('Sec-Fetch-Site')!=='cross-site','ORIGIN','Cross-site writes are not permitted.',403)}
- if(p==='/health')return json({ok:!!env.DB,service:'floof-api',version:'0.3.0',mode:'sandbox',chainExecution:false,storage:env.DB?'D1':'missing'});
+ if(p==='/health')return json({ok:!!env.DB,service:'floof-api',version:'0.4.0',mode:env.CHAIN_EXECUTION==='devnet'?'devnet':'sandbox',chainExecution:env.CHAIN_EXECUTION==='devnet',storage:env.DB?'D1':'missing'});
+ if(p==='/qa-metadata.json'&&req.method==='GET')return json({name:'Floof Devnet QA',symbol:'FLQA',description:'Disposable Floof integration-test token on Solana Devnet. No monetary value.',image:new URL('/mochi/happy-512.webp',u.origin).href});
  requireThat(env.DB,'DATABASE_UNAVAILABLE','Database binding is unavailable.',503);
  const repo=new Repository(env.DB,()=>seedState(buildCoins(now),now));
+ if(p.startsWith('/indexer/')&&p!=='/indexer/webhook'){
+  requireThat(env.INDEXER_SECRET&&req.headers.get('Authorization')===`Bearer ${env.INDEXER_SECRET}`,'FORBIDDEN','Invalid indexer authorization.',403);
+  const chain=rpcClient(env);requireThat(await chain('getGenesisHash')==='EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG','WRONG_NETWORK','Devnet required.',503);
+  if(p==='/indexer/scan'&&req.method==='POST'){const b=await body(req);return json(await scanMarket(env.DB,chain,b.window,now));}
+  if(p==='/indexer/checkpoint'){
+   const name=u.searchParams.get('name');requireThat(name&&/^[a-z0-9:-]{1,100}$/.test(name),'JOB','Invalid job name');
+   if(req.method==='GET'){const row=await env.DB.prepare('SELECT cursor,updated_at FROM chain_jobs WHERE program=? AND name=?').bind(PROGRAM.toBase58(),name).first();return json(row?{...row,cursor:JSON.parse(row.cursor)}:{cursor:null});}
+   requireThat(req.method==='POST','METHOD','POST required',405);const b=await body(req);await env.DB.prepare('INSERT INTO chain_jobs(program,name,cursor,updated_at) VALUES(?,?,?,?) ON CONFLICT(program,name) DO UPDATE SET cursor=excluded.cursor,updated_at=excluded.updated_at').bind(PROGRAM.toBase58(),name,JSON.stringify(b),now).run();return json({saved:true});
+  }
+  if(p==='/indexer/scout-snapshot'&&req.method==='GET')return json(await scoutSnapshot(env.DB,chain,u.searchParams.get('epoch'),now));
+  if(p==='/indexer/scout-publish'&&req.method==='POST'){
+   const b=await body(req),tree=await scoutTree(PROGRAM.toBase58(),b.epoch,b.leaves);requireThat(tree.root===b.root&&tree.budgetLamports===b.budgetLamports,'REWARDS','Manifest does not match its leaves.');
+   const info=(await chain('getAccountInfo',[pda(['scout',u64(b.epoch)]).toBase58(),{encoding:'base64',commitment:'finalized'}])).value;requireThat(info?.owner===PROGRAM.toBase58(),'REWARDS','Reward epoch is not finalized.',409);const data=Buffer.from(info.data[0],'base64');requireThat(data.subarray(0,8).equals(await discriminator('account:ScoutEpoch'))&&data.subarray(16,48).toString('hex')===tree.root&&data.readBigUInt64LE(48)===BigInt(tree.budgetLamports),'REWARDS','On-chain budget or root does not match.',409);
+   const tx=await chain('getTransaction',[b.fundingSignature,{encoding:'json',commitment:'finalized',maxSupportedTransactionVersion:0}]);requireThat(tx&&!tx.meta.err,'REWARDS','Funding transaction is not finalized.',409);const accountKeys=[...tx.transaction.message.accountKeys,...(tx.meta.loadedAddresses?.writable||[]),...(tx.meta.loadedAddresses?.readonly||[])],fundTag=await discriminator('global:fund_scout_epoch'),instructions=tx.transaction.message.instructions;requireThat(instructions.some(ix=>accountKeys[ix.programIdIndex]===PROGRAM.toBase58()&&Buffer.from(base58decode(ix.data)).subarray(0,8).equals(fundTag)&&Buffer.from(base58decode(ix.data)).subarray(16,48).toString('hex')===tree.root)&&instructions.some(ix=>accountKeys[ix.programIdIndex]==='DRay6fNdQ5J82H7xV6uq2aV3mNrUZ1J4PgSKsWgptcm6'&&Buffer.from(base58decode(ix.data)).subarray(0,8).equals(Buffer.from([117,241,198,168,248,218,80,29]))),'REWARDS','Funding must atomically collect real platform fees.');
+   await env.DB.prepare('INSERT OR IGNORE INTO chain_distributions(program,epoch,manifest,funding_signature) VALUES(?,?,?,?)').bind(PROGRAM.toBase58(),String(b.epoch),JSON.stringify({...tree,evidenceHash:b.evidenceHash,points:b.points||[],source:'actual-platform-fees'}),b.fundingSignature).run();return json({published:true,epoch:b.epoch});
+  }
+  throw new AppError(404,'NOT_FOUND','Indexer route not found');
+ }
  if(p==='/integrations')return json({mode:env.CHAIN_EXECUTION==='devnet'?'devnet':'sandbox',chainExecution:env.CHAIN_EXECUTION==='devnet',devnetRpc:!!env.SOLANA_DEVNET_RPC_URL,escrowProgram:env.FLOOF_PROGRAM_ID||null,launchlab:'verified_sbf_with_real_devnet_binary',indexer:!!env.INDEXER_SECRET,requirements:['Fund and deploy the verified program on public Devnet','Configure attestor and independent oracle runtime secrets','Run the persistent indexer/keeper and funded Scout distribution','Verify Raydium-operated CPMM migration and route migrated pools']});
  if(p==='/drafts/launch'){
   requireThat(id,'AUTH_REQUIRED','Sign in to save or restore a draft.',401);
@@ -47,6 +72,7 @@ async function route(req,env,ctx){
  if(p.startsWith('/images/')&&req.method==='GET'){
   requireThat(/^\/images\/[a-f0-9]{64}\.(png|jpg|gif|webp)$/.test(p),'NOT_FOUND','Image not found.',404);const obj=await env.BUCKET?.get(p.slice(1));requireThat(obj,'NOT_FOUND','Image not found.',404);const headers=new Headers({'X-Content-Type-Options':'nosniff','Cache-Control':'private, max-age=86400'});obj.writeHttpMetadata(headers);return new Response(obj.body,{headers});
  }
+ if(env.CHAIN_EXECUTION==='devnet'&&p.startsWith('/truth/')&&req.method==='GET'){const mint=decodeURIComponent(p.slice(7));requireThat(safeWallet(mint),'MINT','Enter a Solana mint address.');return json(await indexedTruth(env,env.DB,mint));}
  if(p.startsWith('/chain/truth/')&&req.method==='GET'){const mint=p.slice('/chain/truth/'.length);requireThat(safeWallet(mint),'MINT','Invalid mint address.');return json(await chainTruth(env,mint));}
  if(p.startsWith('/chain/windows/')&&req.method==='GET'){
   requireThat(env.FLOOF_PROGRAM_ID&&safeWallet(env.FLOOF_PROGRAM_ID),'PROGRAM','Floof Devnet program is not configured.',503);
@@ -86,6 +112,7 @@ async function route(req,env,ctx){
  if(env.CHAIN_EXECUTION==='devnet'&&p==='/quote'&&req.method==='POST'){
   requireThat(id,'AUTH_REQUIRED','Sign in first.',401);const {state}=await repo.read(),wallet=state.accounts[id]?.linkedWallet;requireThat(wallet,'WALLET','Link Phantom first.',401);const b=await body(req);requireThat(b.side==='buy'?b.unit==='sol':b.unit==='token','UNIT','Use SOL for buys and tokens for sells.');const amount=Number(b.amount),scale=b.side==='buy'?1e9:1e6;requireThat(Number.isFinite(amount)&&amount>0&&Number.isSafeInteger(Math.round(amount*scale)),'AMOUNT','Invalid trade amount.');const tx=await prepareChain(env,env.DB,id,wallet,{action:b.side,window:b.coin,amount:String(Math.round(amount*scale)),slippageBps:b.slippageBps},now),q=tx.quote,sol=Number(b.side==='buy'?q.amount:q.output)/1e9,tokens=Number(b.side==='buy'?q.output:q.amount)/1e6;return json({quoteId:tx.id,sol,tokens,fee:Number(q.feeLamports)/1e9,avg:sol/tokens,impact:0,minOut:Number(q.minimumOut)/(b.side==='buy'?1e6:1e9),expiresAt:tx.expiresAt,mode:'devnet'});
  }
+ if(env.CHAIN_EXECUTION==='devnet'&&p.startsWith('/creators/')&&req.method==='GET'){const {state}=await repo.read(),view=await chainSnapshot(env,env.DB,state.accounts[id]?.linkedWallet,now),handle=decodeURIComponent(p.slice(10)),creator=view.creators.find(c=>c.handle===handle);requireThat(creator,'NOT_FOUND','Creator not found',404);return json({...creator,coins:view.coins.filter(c=>c.creator===handle),history:[]});}
  if(env.CHAIN_EXECUTION==='devnet'&&p.startsWith('/coins/')&&req.method==='GET'){
   const [, ,cid,section]=p.split('/');requireThat(safeWallet(cid),'COIN','Invalid on-chain window.');
   if(section==='trades'||section==='candles'){const rows=await env.DB.prepare('SELECT * FROM chain_trades WHERE program=? AND window=? ORDER BY block_time DESC LIMIT 1000').bind(env.FLOOF_PROGRAM_ID,cid).all();if(section==='trades')return json(rows.results.map(r=>({id:r.signature,coin:cid,wallet:r.wallet,kind:r.side,amount:Number(r.lamports)/1e9,tokens:Number(r.tokens)/1e6,t:r.block_time})));const period=({'5m':300000,'1h':3600000,'4h':14400000,'1d':86400000})[u.searchParams.get('tf')||'1h'];requireThat(period,'TIMEFRAME','Invalid chart timeframe.');const buckets=new Map();for(const r of rows.results.reverse()){const at=Math.floor(r.block_time/period)*period,price=Number(r.lamports)/Number(r.tokens)/1000,v=Number(r.lamports)/1e9,bar=buckets.get(at);if(bar){bar[2]=Math.max(bar[2],price);bar[3]=Math.min(bar[3],price);bar[4]=price;bar[5]+=v}else buckets.set(at,[at,price,price,price,price,v])}return json([...buckets.values()]);}

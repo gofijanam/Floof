@@ -1,7 +1,7 @@
 import {requireThat} from './errors.mjs';
 import {base58encode,fromBase64,hash,hex} from './crypto.mjs';
 // Borsh layouts emitted by programs/floof-escrow. Amounts stay decimal strings.
-const layouts={WindowCreated:[['window','key'],['creator','key'],['mint','key'],['end','i64']],Pledged:[['window','key'],['wallet','key'],['amount','u64'],['total','u64']],WindowSettled:[['window','key'],['state','u8'],['raised','u64']],Claimed:[['window','key'],['wallet','key'],['tokens','u64'],['refund','u64']],BondSlashed:[['window','key'],['proof_hash','hash']]};
+const layouts={WindowCreated:[['window','key'],['creator','key'],['mint','key'],['end','i64']],Pledged:[['window','key'],['wallet','key'],['amount','u64'],['total','u64']],WindowSettled:[['window','key'],['state','u8'],['raised','u64']],Claimed:[['window','key'],['wallet','key'],['tokens','u64'],['refund','u64']],BondSlashed:[['window','key'],['proof_hash','hash']],ScoutFunded:[['epoch','u64'],['root','hash'],['budget','u64']],ScoutClaimed:[['epoch','u64'],['wallet','key'],['amount','u64']]};
 let decoders;
 async function eventDecoders(){return decoders??=Promise.all(Object.entries(layouts).map(async([kind,fields])=>[(await hash('event:'+kind)).slice(0,16),kind,fields]))}
 export async function decodeEvents(tx,program){
@@ -26,7 +26,7 @@ export async function decodeEvents(tx,program){
 export async function ingestFinalized(db,signature,tx,program,now){
  const events=await decodeEvents(tx,program);
  // Raw record and event rows commit atomically. Replay repairs missing event rows without duplicates.
- const statements=[db.prepare('INSERT OR IGNORE INTO indexed_transactions (signature,slot,block_time,program_id,body,indexed_at) VALUES (?,?,?,?,?,?)').bind(signature,tx.slot,tx.blockTime,program,JSON.stringify(tx),now),...events.map(e=>db.prepare('INSERT OR IGNORE INTO chain_events (signature,log_index,slot,program_id,window,kind,body,indexed_at) VALUES (?,?,?,?,?,?,?,?)').bind(signature,e.logIndex,tx.slot,program,e.window,e.kind,JSON.stringify(e),now))];
+ const statements=[db.prepare('INSERT OR IGNORE INTO indexed_transactions (signature,slot,block_time,program_id,body,indexed_at) VALUES (?,?,?,?,?,?)').bind(signature,tx.slot,tx.blockTime,program,JSON.stringify(tx),now),...events.map(e=>db.prepare('INSERT OR IGNORE INTO chain_events (signature,log_index,slot,program_id,window,kind,body,indexed_at) VALUES (?,?,?,?,?,?,?,?)').bind(signature,e.logIndex,tx.slot,program,e.window||`scout:${e.epoch}`,e.kind,JSON.stringify(e),now))];
  const results=await db.batch(statements);return {inserted:results[0].meta.changes,events:results.slice(1).reduce((n,r)=>n+r.meta.changes,0)};
 }
 export async function chainWindow(db,program,window){
