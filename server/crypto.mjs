@@ -1,5 +1,5 @@
 const ABC='123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
-export function base58decode(text){if(typeof text!=='string'||text.length>100)throw new Error('Invalid base58');let n=0n;for(const char of text){const i=ABC.indexOf(char);if(i<0)throw new Error('Invalid base58');n=n*58n+BigInt(i)}let hex=n.toString(16);if(hex.length%2)hex='0'+hex;const b=n===0n?[]:hex.match(/../g).map(x=>parseInt(x,16));let zeros=0;for(const c of text){if(c!=='1')break;zeros++}return new Uint8Array([...Array(zeros).fill(0),...b])}
+export function base58decode(text,maxLength=100){if(typeof text!=='string'||text.length>maxLength)throw new Error('Invalid base58');let n=0n;for(const char of text){const i=ABC.indexOf(char);if(i<0)throw new Error('Invalid base58');n=n*58n+BigInt(i)}let hex=n.toString(16);if(hex.length%2)hex='0'+hex;const b=n===0n?[]:hex.match(/../g).map(x=>parseInt(x,16));let zeros=0;for(const c of text){if(c!=='1')break;zeros++}return new Uint8Array([...Array(zeros).fill(0),...b])}
 export const hex=bytes=>[...new Uint8Array(bytes)].map(v=>v.toString(16).padStart(2,'0')).join('');
 export const hash=async text=>hex(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(text)));
 export function fromBase64(s){return Uint8Array.from(atob(s),c=>c.charCodeAt(0))}

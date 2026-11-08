@@ -9,7 +9,7 @@ export async function decodeMarket(tx,w){
  for(const [rows,sign]of [[pre,-1n],[post,1n]])for(const b of rows)if(b.mint===mint){requireThat(b.owner&&keys[b.accountIndex],'HISTORY','Token balance lacks owner evidence.',409);owners.set(b.owner,(owners.get(b.owner)||0n)+sign*amount(b));accounts.add(keys[b.accountIndex]);}
  const instructions=[...tx.transaction.message.instructions,...(tx.meta.innerInstructions||[]).flatMap(g=>g.instructions||[])];
  const tags=await Promise.all(['buy_exact_in','buy_exact_out','sell_exact_in','sell_exact_out'].map(n=>discriminator('global:'+n)));
- const matches=instructions.filter(ix=>{const pid=keys[ix.programIdIndex],a=ix.accounts||[],data=Buffer.from(base58decode(ix.data||''));return pid===LAUNCHLAB.toBase58()&&keys[a[4]]===w.pool.toBase58()&&tags.some(t=>data.subarray(0,8).equals(t))||pid===CPMM.toBase58()&&w.cpmmPool&&keys[a[3]]===w.cpmmPool&&data.subarray(0,8).equals(Buffer.from([143,190,90,218,196,30,51,222]));});
+ const matches=instructions.filter(ix=>{const pid=keys[ix.programIdIndex],a=ix.accounts||[];if(pid!==LAUNCHLAB.toBase58()&&pid!==CPMM.toBase58())return false;const data=Buffer.from(ix.data?base58decode(ix.data,4096):[]);return pid===LAUNCHLAB.toBase58()&&keys[a[4]]===w.pool.toBase58()&&tags.some(t=>data.subarray(0,8).equals(t))||pid===CPMM.toBase58()&&w.cpmmPool&&keys[a[3]]===w.cpmmPool&&data.subarray(0,8).equals(Buffer.from([143,190,90,218,196,30,51,222]));});
  let trade=null,classification='transfer';
  // Floof's initial exact-out CPI is the settlement allocation, not a user market trade.
  const settlement=instructions.some(ix=>keys[ix.programIdIndex]===PROGRAM.toBase58());
@@ -20,7 +20,7 @@ export async function decodeMarket(tx,w){
   if(delta!==0n&&q!==0n&&((delta>0n)===(q>0n))){trade={wallet,side:delta>0n?'buy':'sell',tokens:String(delta<0n?-delta:delta),lamports:String(q<0n?-q:q)};classification='swap';}else classification='unclassified-swap';
  }else if(matches.length>1&&!settlement)classification='unclassified-swap';
  else if(settlement)classification='floof';
- const migrationTag=await discriminator('global:migrate_to_cpswap');if(instructions.some(ix=>keys[ix.programIdIndex]===LAUNCHLAB.toBase58()&&keys[ix.accounts?.[17]]===w.pool.toBase58()&&Buffer.from(base58decode(ix.data||'')).subarray(0,8).equals(migrationTag)))classification='migration';
+ const migrationTag=await discriminator('global:migrate_to_cpswap');if(instructions.some(ix=>keys[ix.programIdIndex]===LAUNCHLAB.toBase58()&&keys[ix.accounts?.[17]]===w.pool.toBase58()&&Buffer.from(base58decode(ix.data||'',4096)).subarray(0,8).equals(migrationTag)))classification='migration';
  return {classification,trade,accounts:[...accounts],movements:[...owners].filter(([,d])=>d!==0n).map(([wallet,delta])=>({wallet,delta:String(delta)}))};
 }
 export async function ingestMarket(db,window,w,signature,tx,now=Date.now()){
