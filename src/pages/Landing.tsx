@@ -30,7 +30,9 @@ export default function Landing({ ready }: { ready: boolean }) {
 
 /* ------------------------------------------------------------------ HERO */
 function Hero({ ready }: { ready: boolean }) {
-  const floof = useCoin('floof')!
+  const floof = useStore(s => s.coins.find(c=>c.id==='floof') || s.coins.find(c=>c.status==='open') || s.coins[0])
+  const active = floof?.status === 'open'
+  const featuredPath = floof ? (['open','upcoming','refunding'].includes(floof.status) ? `/coin/${floof.id}` : `/trade/${floof.id}`) : '/explore'
   const now = useStore((s) => s.now)
   const feed = useStore((s) => s.feed)
   const blocked = useStore((s) => s.stats.snipersBlocked)
@@ -62,10 +64,10 @@ function Hero({ ready }: { ready: boolean }) {
     const t = setTimeout(() => { setPoofed(false); setDemo(10) }, 3200)
     return () => clearTimeout(t)
   }, [demo, poofed, reduced])
-  const cap = maxRaise(floof)
-  const recent = feed.filter((f) => f.coin === 'floof' && f.kind === 'pledge').slice(0, 1)[0]
+  const cap = floof ? maxRaise(floof) : 0
+  const recent = feed.filter((f) => f.coin === floof?.id && f.kind === 'pledge').slice(0, 1)[0]
   const spark = useMemo(() => Array.from({ length: 24 }, (_, i) => 20 + i * 2 + Math.sin(i * 1.3) * 6), [])
-  const left = floof.windowEnd - now
+  const left = floof ? floof.windowEnd - now : 0
   const H = { initial: { opacity: 0, y: 30 }, animate: ready ? { opacity: 1, y: 0 } : {}, }
   return (
     <section className="relative min-h-[100svh] pt-24 md:pt-20">
@@ -73,8 +75,8 @@ function Hero({ ready }: { ready: boolean }) {
         {/* copy */}
         <div className="relative z-20 pt-4 lg:pt-0 [grid-area:top] lg:self-end">
           <motion.div {...H} transition={{ delay: 0.05, duration: 0.6 }}>
-            <Link to="/coin/floof" className="inline-flex items-center gap-2 rounded-full border border-mint/30 bg-mint/10 py-1 pl-2 pr-3 text-xs font-extrabold text-mint">
-              <LiveDot /> $FLOOF fair window is live · <span className="font-num tnum">{mmss(left)}</span> <IArrow s={13} />
+            <Link to={featuredPath} className="inline-flex items-center gap-2 rounded-full border border-mint/30 bg-mint/10 py-1 pl-2 pr-3 text-xs font-extrabold text-mint">
+              <LiveDot /> {active ? `$${floof.ticker} fair window is live` : 'Explore fair launches'} {active && <span className="font-num tnum">· {mmss(left)}</span>} <IArrow s={13} />
             </Link>
           </motion.div>
           <h1 className="h-display mt-5 text-[15vw] leading-[.9] sm:text-7xl lg:text-[5.6rem] xl:text-[6.4rem]">
@@ -92,7 +94,7 @@ function Hero({ ready }: { ready: boolean }) {
             A 10-minute fair window. Everyone pledges into one cloud, then <span className="text-cream">all buy together at one price, in one block.</span> Snipers get poof’d.
           </motion.p>
           <motion.div {...H} transition={{ delay: 0.55, duration: 0.6 }} className="mt-8 flex flex-wrap items-center gap-3">
-            <Magnetic><Link to="/coin/floof" className="btn-candy sheen px-7 py-4 text-base">Join the $FLOOF window <IArrow s={18} /></Link></Magnetic>
+            <Magnetic><Link to={featuredPath} className="btn-candy sheen px-7 py-4 text-base">{active ? `Join the $${floof.ticker} window` : 'Explore launches'} <IArrow s={18} /></Link></Magnetic>
             <Magnetic strength={0.2}><Link to="/create" className="btn-ghost px-6 py-4 text-base">Launch a coin</Link></Magnetic>
           </motion.div>
           <motion.div {...H} transition={{ delay: 0.65, duration: 0.6 }} className="mt-8 hidden gap-6 text-sm font-bold text-lav sm:flex">
@@ -125,23 +127,23 @@ function Hero({ ready }: { ready: boolean }) {
           {/* HUD widgets */}
           <motion.div style={{ x: p1x, y: p1y }} className="absolute left-0 top-[4%] z-10 hidden w-[46%] max-w-[230px] md:block lg:left-[0%] lg:top-[10%]">
             <div className="glass neon-b anim-floaty rounded-2xl p-3 md:p-4">
-              <div className="flex items-center justify-between"><span className="label">$FLOOF closes</span><LiveDot /></div>
-              <Countdown ms={left} size="md" />
-              <div className="mt-2"><MiniMeter coin={floof} /></div>
+              <div className="flex items-center justify-between"><span className="label">{active ? `$${floof.ticker} closes` : floof ? `$${floof.ticker} window` : 'Fair launch windows'}</span><LiveDot /></div>
+              {active ? <Countdown ms={left} size="md" /> : <div className="font-num text-xl">{floof ? 'Settled' : 'No active window'}</div>}
+              <div className="mt-2">{floof && <MiniMeter coin={floof} />}</div>
             </div>
           </motion.div>
           <motion.div style={{ x: p2x, y: p2y }} className="absolute right-0 top-[2%] z-10 w-[44%] max-w-[220px] lg:top-[8%]">
             <div className="glass neon-p anim-floaty2 rounded-2xl p-3 md:p-4">
               <div className="label">escrow cloud</div>
-              <div className="font-num text-2xl font-semibold text-pink tnum md:text-3xl"><Num v={floof.pledged} d={1} /> <span className="text-sm text-lav">SOL</span></div>
+              <div className="font-num text-2xl font-semibold text-pink tnum md:text-3xl"><Num v={floof?.pledged || 0} d={1} /> <span className="text-sm text-lav">SOL</span></div>
               <div className="mt-1 hidden md:block"><Sparkline data={spark} w={180} h={30} color="#FF5FB8" /></div>
-              <div className="text-[11px] font-bold text-lav tnum">{floof.pledgers} floofs · cap {cap.toFixed(0)}</div>
+              <div className="text-[11px] font-bold text-lav tnum">{floof?.pledgers || 0} floofs · cap {cap.toFixed(0)}</div>
             </div>
           </motion.div>
           <motion.div style={{ x: p2x, y: p1y }} className="absolute bottom-[6%] left-0 z-10 hidden w-[200px] md:block lg:bottom-[14%]">
             <div className="glass anim-floaty2 rounded-2xl p-4" style={{ animationDelay: '-2s' }}>
               <div className="label">one price for all</div>
-              <div className="font-num text-2xl font-semibold text-blue tnum">≤ {fmtPrice(floof.priceCeiling)}</div>
+              <div className="font-num text-2xl font-semibold text-blue tnum">≤ {fmtPrice(floof?.priceCeiling || 0)}</div>
               <div className="text-[11px] font-bold text-lav">SOL / token · price ceiling</div>
             </div>
           </motion.div>
