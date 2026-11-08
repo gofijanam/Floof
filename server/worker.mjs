@@ -43,13 +43,15 @@ async function route(req,env,ctx){
  const repo=new Repository(env.DB,()=>seedState(buildCoins(now),now));
  if(p.startsWith('/indexer/')&&p!=='/indexer/webhook'){
   requireThat(env.INDEXER_SECRET&&req.headers.get('Authorization')===`Bearer ${env.INDEXER_SECRET}`,'FORBIDDEN','Invalid indexer authorization.',403);
-  const chain=rpcClient(env);requireThat(await chain('getGenesisHash')==='EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG','WRONG_NETWORK','Devnet required.',503);
-  if(p==='/indexer/scan'&&req.method==='POST'){const b=await body(req);return json(await scanMarket(env.DB,chain,b.window,now));}
   if(p==='/indexer/checkpoint'){
    const name=u.searchParams.get('name');requireThat(name&&/^[a-z0-9:-]{1,100}$/.test(name),'JOB','Invalid job name');
    if(req.method==='GET'){const row=await env.DB.prepare('SELECT cursor,updated_at FROM chain_jobs WHERE program=? AND name=?').bind(PROGRAM.toBase58(),name).first();return json(row?{...row,cursor:JSON.parse(row.cursor)}:{cursor:null});}
    requireThat(req.method==='POST','METHOD','POST required',405);const b=await body(req);await env.DB.prepare('INSERT INTO chain_jobs(program,name,cursor,updated_at) VALUES(?,?,?,?) ON CONFLICT(program,name) DO UPDATE SET cursor=excluded.cursor,updated_at=excluded.updated_at').bind(PROGRAM.toBase58(),name,JSON.stringify(b),now).run();return json({saved:true});
   }
+  // Durable checkpoint recovery must work during an RPC outage. Chain-reading
+  // operations still verify Devnet before doing any work.
+  const chain=rpcClient(env);requireThat(await chain('getGenesisHash')==='EtWTRABZaYq6iMfeYKouRu166VU2xqa1wcaWoxPkrZBG','WRONG_NETWORK','Devnet required.',503);
+  if(p==='/indexer/scan'&&req.method==='POST'){const b=await body(req);return json(await scanMarket(env.DB,chain,b.window,now));}
   if(p==='/indexer/scout-snapshot'&&req.method==='GET')return json(await scoutSnapshot(env.DB,chain,u.searchParams.get('epoch'),now));
   if(p==='/indexer/scout-publish'&&req.method==='POST'){
    const b=await body(req),tree=await scoutTree(PROGRAM.toBase58(),b.epoch,b.leaves);requireThat(tree.root===b.root&&tree.budgetLamports===b.budgetLamports,'REWARDS','Manifest does not match its leaves.');

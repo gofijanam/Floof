@@ -5,6 +5,16 @@ import {build} from 'esbuild';
 import {sqliteDB} from '../scripts/sqlite-adapter.mjs';
 await mkdir('.local',{recursive:true});await build({entryPoints:['server/worker.mjs'],bundle:true,format:'esm',platform:'node',packages:'external',outfile:'.local/test-worker.mjs'});
 const worker=(await import('../.local/test-worker.mjs')).default;
+test('authorized durable checkpoints remain recoverable when RPC configuration is unavailable',async()=>{
+ const env={...await setup(),INDEXER_SECRET:'test-only-indexer',SOLANA_DEVNET_RPC_URL:'http://invalid-rpc.test'};
+ const url='https://floof.test/api/indexer/checkpoint?name=outage-test';
+ const request=(method,token,data)=>worker.fetch(new Request(url,{method,headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'},...(data?{body:JSON.stringify(data)}:{})}),env,{});
+ assert.equal((await request('GET','wrong')).status,403);
+ assert.equal((await request('POST',env.INDEXER_SECRET,{head:'finalized-test-signature'})).status,200);
+ const result=await request('GET',env.INDEXER_SECRET);assert.equal(result.status,200);
+ assert.deepEqual((await result.json()).cursor,{head:'finalized-test-signature'});
+ const scan=await worker.fetch(new Request('https://floof.test/api/indexer/scan',{method:'POST',headers:{Authorization:`Bearer ${env.INDEXER_SECRET}`},body:'{}'}),env,{});assert.equal(scan.status,503);
+});
 async function setup(){const DB=sqliteDB();for(const f of (await readdir('drizzle')).filter(f=>f.endsWith('.sql')).sort())DB.raw.exec(await readFile('drizzle/'+f,'utf8'));return {DB}}
 async function call(env,path,{data,user='alice',key=crypto.randomUUID(),origin}={}){const headers=new Headers();if(user)headers.set('oai-authenticated-user-id',user);if(origin)headers.set('Origin',origin);if(data!==undefined){headers.set('Content-Type','application/json');headers.set('Idempotency-Key',key)}const res=await worker.fetch(new Request('https://floof.test/api'+path,{method:data===undefined?'GET':'POST',headers,body:data===undefined?undefined:JSON.stringify(data)}),env,{});return {status:res.status,body:await res.json()}}
 test('bootstrap is persistent; authentication and cross-origin checks are enforced',async()=>{const env=await setup();const first=await call(env,'/bootstrap');const second=await call(env,'/bootstrap');assert.equal(first.status,200);assert.equal(first.body.coins[0].windowEnd,second.body.coins[0].windowEnd);assert.equal(first.body.stats.launched,0);assert.equal((await call(env,'/session',{data:{},user:null})).status,401);assert.equal((await call(env,'/session',{data:{},origin:'https://evil.test'})).status,403)});
