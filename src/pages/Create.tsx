@@ -221,8 +221,8 @@ export default function Create() {
                     ))}
                   </div>
                   <div className="flex items-center justify-between rounded-2xl bg-blue/10 px-4 py-3 font-extrabold ring-1 ring-blue/25"><span className="flex items-center gap-2"><ILock s={16} /> Due now</span><span className="font-num tnum">{(f.bond + 0.02 + reserve).toFixed(2)} test SOL</span></div>
-                  <p className="text-xs font-semibold text-lav">{f.bond} test SOL is refundable bond collateral; 0.02 test SOL is the creation fee. {devnet?'An additional 0.1 test SOL funds pool rent; unused reserve can be reclaimed. Network and account rent are additional. ':''} {wallet ? `Balance after creation: ${(bal - f.bond - 0.02 - reserve).toFixed(2)} test SOL.` : 'Open your sandbox to receive a test balance.'}</p>
-                  <label className="flex cursor-pointer items-start gap-3 text-sm font-bold text-lav"><input type="checkbox" className="mt-1 h-4 w-4 accent-[#FF5FB8]" checked={checked} onChange={e => setChecked(e.target.checked)} />I reviewed these settings. They cannot be edited after creation. This creates a test launch with no real SOL or on-chain token.</label>
+                  <p className="text-xs font-semibold text-lav">{f.bond} test SOL is refundable bond collateral; 0.02 test SOL is the creation fee. {devnet?'An additional 0.1 test SOL funds pool rent; unused reserve can be reclaimed. Network and account rent are additional. ':''} {wallet ? `Balance after creation: ${(bal - f.bond - 0.02 - reserve).toFixed(2)} test SOL.` : devnet ? 'Connect Phantom with Devnet SOL to continue.' : 'Open your sandbox to receive a test balance.'}</p>
+                  <label className="flex cursor-pointer items-start gap-3 text-sm font-bold text-lav"><input type="checkbox" className="mt-1 h-4 w-4 accent-[#FF5FB8]" checked={checked} onChange={e => setChecked(e.target.checked)} />I reviewed these settings. They cannot be edited after creation. {devnet ? 'This reserves a Devnet launch using test SOL. A token is minted if its window settles successfully.' : 'This creates a test launch with no real SOL or on-chain token.'}</label>
                 </div>
               )}
             </motion.div>
@@ -231,7 +231,7 @@ export default function Create() {
             <button onClick={() => setStep((s) => Math.max(0, s - 1))} disabled={step === 0} className="btn-ghost disabled:opacity-30"><IBack s={16} /> Back</button>
             {touched && !stepOk(step) && <span className="text-xs font-extrabold text-danger">Fix the highlighted fields</span>}
             {step < 3 ? <button onClick={next} disabled={uploading || !draftReady} className="btn-candy disabled:opacity-40">Continue <IArrow s={16} /></button>
-              : !wallet ? <button onClick={connectWallet} className="btn-candy">Open sandbox</button>
+              : !wallet ? <button onClick={connectWallet} className="btn-candy">{devnet?'Connect wallet':'Open sandbox'}</button>
               : <button onClick={() => setOpen(true)} disabled={!!Object.keys(errors).length || !checked || uploading || saving || !draftReady} className="btn-candy sheen disabled:opacity-40">Create & lock bond</button>}
           </div>
         </Card>
@@ -243,7 +243,7 @@ export default function Create() {
             <div className="flex h-3 overflow-hidden rounded-full" aria-label={`Fair window ${f.alloc}%, creator ${f.creatorPct}%, trading pool ${100 - f.alloc - f.creatorPct}%`}><span className="bg-pink" style={{width: `${f.alloc}%`}} /><span className="bg-blue" style={{width: `${f.creatorPct}%`}} /><span className="flex-1 bg-mint" /></div>
             {[['Fair window', f.alloc, 'text-pink'], ['Creator · locked', f.creatorPct, 'text-blue'], ['Trading pool', 100 - f.alloc - f.creatorPct, 'text-mint']].map(([label, pct, color]) => <div key={label} className="mt-2 flex justify-between text-xs"><span className={String(color)}>{label}</span><span className="font-num tnum">{pct}% · {Number(pct) * 10}M</span></div>)}
           </Card>
-          <Card className="p-4 text-xs font-bold text-lav"><div className="mb-1 font-extrabold text-cream">One window, one clearing price</div>Pledges share a 1% cap. Successful windows fill pro-rata; unused test SOL is claimable. Miss the minimum target and pledges are refunded. This preview uses the sandbox trading pool.</Card>
+          <Card className="p-4 text-xs font-bold text-lav"><div className="mb-1 font-extrabold text-cream">One window, one clearing price</div>Pledges share a 1% cap. Successful windows fill pro-rata; unused test SOL is claimable. Miss the minimum target and pledges are refunded. {devnet ? 'Successful windows settle into Raydium LaunchLab on Devnet.' : 'This preview uses the sandbox trading pool.'}</Card>
         </div>
       </div>
       <TxModal open={open} onClose={() => setOpen(false)} title={`Create $${f.ticker}`} confirmLabel="Create test launch"

@@ -28,11 +28,12 @@ export function SoundToggle() {
 export function WalletButton({ compact }: { compact?: boolean }) {
   const wallet = useStore((s) => s.wallet), connecting = useStore((s) => s.connecting), sol = useStore((s) => s.sol)
   const address = useStore(s => s.walletAddress)
+  const devnet = useStore(s => s.mode==='devnet')
   const [open, setOpen] = useState(false)
   if (!wallet) return (
     <Magnetic strength={0.25}>
       <button onClick={connectWallet} className={cx('btn-candy sheen', compact ? 'px-4 py-2 text-sm' : 'px-5 py-2.5 text-sm')}>
-        {connecting ? <span className="inline-flex items-center gap-2"><span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-night/30 border-t-night" />Connecting</span> : <><IWallet s={16} />{compact ? 'Sandbox' : 'Open sandbox'}</>}
+        {connecting ? <span className="inline-flex items-center gap-2"><span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-night/30 border-t-night" />Connecting</span> : <><IWallet s={16} />{devnet ? 'Connect wallet' : compact ? 'Sandbox' : 'Open sandbox'}</>}
       </button>
     </Magnetic>
   )
@@ -46,7 +47,7 @@ export function WalletButton({ compact }: { compact?: boolean }) {
       <AnimatePresence>
         {open && (
           <motion.div initial={{ opacity: 0, y: -6, scale: 0.96 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: -6, scale: 0.96 }} className="glass-strong absolute right-0 top-12 z-50 w-56 rounded-2xl p-2 text-sm font-bold">
-            <div className="px-3 py-2 text-xs text-lav">Sandbox · test SOL</div>
+            <div className="px-3 py-2 text-xs text-lav">{devnet ? 'Solana Devnet · test SOL' : 'Sandbox · test SOL'}</div>
             <Link to="/portfolio" onClick={() => setOpen(false)} className="block rounded-xl px-3 py-2 hover:bg-lav/10">Portfolio & rewards</Link>
             <button onClick={() => { linkWallet(); setOpen(false) }} className="block w-full rounded-xl px-3 py-2 text-left hover:bg-lav/10">Link Phantom wallet</button>
             <button onClick={() => { disconnectWallet(); setOpen(false) }} className="block w-full rounded-xl px-3 py-2 text-left text-danger hover:bg-danger/10">Disconnect</button>
@@ -69,6 +70,7 @@ function CASearch() {
 }
 
 export function Nav() {
+  const mode=useStore(s=>s.mode)
   const loc = useLocation()
   return (
     <header className="fixed inset-x-0 top-0 z-40">
@@ -78,7 +80,7 @@ export function Nav() {
             <img src="./logo/floof-mark-mochi.svg" alt="" className="h-9 w-9 transition-transform duration-300 group-hover:scale-110 group-hover:-rotate-6" />
             <img src="./logo/floof-wordmark-cream.svg" alt="floof.fun" className="hidden h-7 sm:block" />
           </Link>
-          <span className="hidden rounded-full bg-blue/10 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-blue ring-1 ring-blue/30 sm:inline">sandbox</span>
+          <span className="hidden rounded-full bg-blue/10 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-blue ring-1 ring-blue/30 sm:inline">{mode==='devnet'?'devnet':'sandbox'}</span>
           <nav className="ml-2 hidden items-center lg:flex">
             {NAV.map((n) => {
               const active = loc.pathname.startsWith(n.to)

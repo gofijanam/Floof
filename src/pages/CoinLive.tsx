@@ -12,6 +12,7 @@ import { maxRaise, settle, walletCap } from '../lib/mock'
 import { ago, fmtPrice, hms, short } from '../lib/format'
 
 export default function CoinLive() {
+  const devnet=useStore(s=>s.mode==='devnet')
   const { id } = useParams()
   const c = useCoin(id)
   const now = useStore((s) => s.now)
@@ -38,7 +39,7 @@ export default function CoinLive() {
             {upcoming ? <span className="chip text-blue"><IClock s={13} /> opens in {hms(c.windowStart - now)}</span> : <span className="chip text-mint"><LiveDot /> window live</span>}
           </div>
           <div className="mt-1 text-base font-bold text-lav">{c.name} — {c.tagline}</div>
-          <button onClick={() => { navigator.clipboard?.writeText(c.ca).catch(() => {}); toast({ kind: 'success', title: 'Sandbox identifier copied' }) }} className="mt-1 inline-flex items-center gap-1.5 font-num text-xs text-lav/70 hover:text-cream tnum"><ICopy s={12} /> ID {short(c.ca, 6)}</button>
+          <button onClick={() => { navigator.clipboard?.writeText(c.ca).catch(() => {}); toast({ kind: 'success', title: devnet?'Token address copied':'Sandbox identifier copied' }) }} className="mt-1 inline-flex items-center gap-1.5 font-num text-xs text-lav/70 hover:text-cream tnum"><ICopy s={12} /> ID {short(c.ca, 6)}</button>
         </div>
       </div>
 
@@ -122,6 +123,7 @@ function PledgeForm({ coinId }: { coinId: string }) {
   const wallet = useStore((s) => s.wallet)
   const bal = useStore((s) => s.sol)
   const mine = useStore((s) => s.myPledges[coinId] ?? 0)
+  const devnet=useStore(s=>s.mode==='devnet')
   const [amt, setAmt] = useState('')
   const [open, setOpen] = useState(false)
   const cap = walletCap(c)
@@ -161,16 +163,16 @@ function PledgeForm({ coinId }: { coinId: string }) {
         <Row k="Price" v={`one price ≤ ${fmtPrice(c.priceCeiling)}`} />
       </div>
       <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-[11px] font-extrabold text-mint">
-        <span className="flex items-center gap-1"><ICheck s={12} /> sandbox identity</span><span className="flex items-center gap-1"><ICheck s={12} /> chain checks pending</span><span className="flex items-center gap-1"><ICheck s={12} /> under 1% cap</span>
+        <span className="flex items-center gap-1"><ICheck s={12} /> {devnet?'verified wallet':'sandbox identity'}</span><span className="flex items-center gap-1"><ICheck s={12} /> {devnet?'eligibility checked on pledge':'chain checks pending'}</span><span className="flex items-center gap-1"><ICheck s={12} /> under 1% cap</span>
       </div>
       {upcoming ? (
-        <button onClick={() => jumpToZero(c.id, 5000)} className="btn-ice mt-4 w-full py-3.5">Advance sandbox window</button>
+        devnet ? <div className="mt-4 text-center text-sm text-lav">The window opens at its scheduled Devnet time.</div> : <button onClick={() => jumpToZero(c.id, 5000)} className="btn-ice mt-4 w-full py-3.5">Advance sandbox window</button>
       ) : !wallet ? (
-        <Magnetic className="mt-4 w-full" strength={0.15}><button onClick={connectWallet} className="btn-candy w-full py-3.5">Open sandbox to pledge</button></Magnetic>
+        <Magnetic className="mt-4 w-full" strength={0.15}><button onClick={connectWallet} className="btn-candy w-full py-3.5">{devnet?'Connect wallet to pledge':'Open sandbox to pledge'}</button></Magnetic>
       ) : (
         <button disabled={!valid} onClick={() => setOpen(true)} className="btn-candy mt-4 w-full py-3.5 text-base disabled:cursor-not-allowed disabled:opacity-40">Pledge {valid ? `${v} SOL` : ''}</button>
       )}
-      <p className="mt-2 text-center text-[11px] font-bold text-lav/60">Pledges sit in escrow until zero. Sandbox ledger — test balances only.</p>
+      <p className="mt-2 text-center text-[11px] font-bold text-lav/60">Pledges sit in escrow until zero. {devnet?'Solana Devnet — test SOL only.':'Sandbox ledger — test balances only.'}</p>
       <TxModal open={open} onClose={() => { setOpen(false) }} title={`Pledge to $${c.ticker}`} confirmLabel="Confirm pledge"
         rows={[{ k: 'Amount', v: `${v || 0} SOL`, strong: true }, { k: 'Est. fill', v: proj.failed ? 'below min' : `${(proj.fill * 100).toFixed(0)}%` }, { k: 'Est. tokens', v: proj.myTokens ? Math.round(proj.myTokens).toLocaleString() : '—' }, { k: 'Escrow program', v: 'FLooF…escr (devnet)' }, { k: 'Network fee', v: '~0.000005 SOL' }]}
         note="Your SOL is held by the escrow program. At zero you either buy at the one clearing price (pro-rata if oversubscribed) or get refunded."

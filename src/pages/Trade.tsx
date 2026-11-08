@@ -17,6 +17,7 @@ import {useApi} from '../lib/useApi'
 
 type TF = '5m' | '1h' | '4h' | '1d'
 export default function Trade() {
+  const devnet=useStore(s=>s.mode==='devnet')
   const { id } = useParams()
   const c = useCoin(id)
   const now = useStore((s) => s.now)
@@ -61,7 +62,7 @@ export default function Trade() {
           <HS k="Vol 24h" v={`${c.volume24h.toFixed(3)} SOL`} />
           <HS k="Holders" v={c.holders.toLocaleString()} />
           <HS k="vs window" v={`${mult.toFixed(2)}×`} accent={mult >= 1 ? 'text-mint' : 'text-danger'} />
-          <HS k="Venue" v={grad ? 'Sandbox pool' : 'Sandbox curve'} accent={grad ? 'text-lav' : 'text-pink'} />
+          <HS k="Venue" v={grad ? (devnet?'Raydium CPMM':'Sandbox pool') : (devnet?'Raydium LaunchLab':'Sandbox curve')} accent={grad ? 'text-lav' : 'text-pink'} />
         </div>
       </div>
 
@@ -69,7 +70,7 @@ export default function Trade() {
         <div className="min-w-0 space-y-4">
           <Card className="p-3 md:p-4">
             <div className="flex flex-wrap items-center justify-between gap-2 px-1">
-              <div className="flex items-center gap-2 text-sm font-extrabold"><LiveDot /> ${c.ticker}/SOL <span className="text-lav">· {grad ? 'Sandbox pool' : 'Sandbox curve'}</span></div>
+              <div className="flex items-center gap-2 text-sm font-extrabold"><LiveDot /> ${c.ticker}/SOL <span className="text-lav">· {grad ? (devnet?'Raydium CPMM':'Sandbox pool') : (devnet?'Raydium LaunchLab':'Sandbox curve')}</span></div>
               <Tabs id="tf" size="sm" value={tf} onChange={setTf} items={(['5m', '1h', '4h', '1d'] as TF[]).map((v) => ({ v, label: v }))} />
             </div>
             <div className="mt-3"><NeonChart data={data} height={360} clearing={c.clearingPrice || undefined} /></div>
@@ -127,7 +128,7 @@ export default function Trade() {
             <div className="relative mt-3 h-3 overflow-hidden rounded-full bg-night ring-1 ring-lav/10">
               <motion.div className="absolute inset-y-0 left-0 rounded-full anim-gradient" style={{ backgroundImage: grad ? 'linear-gradient(90deg,#7CF5C8,#5FD4FF,#7CF5C8)' : 'linear-gradient(90deg,#B69CFF,#FF5FB8,#B69CFF)' }} animate={{ width: `${(c.curveSol / (c.graduationTarget || GRADUATE_SOL)) * 100}%` }} />
             </div>
-            <div className="mt-2 text-xs font-bold text-lav">{grad ? 'Graduated — sandbox pool target reached.' : <>When the curve reaches {c.graduationTarget || GRADUATE_SOL} SOL, the intended Devnet flow migrates to <span className="text-cream">Raydium CPMM</span>. This sandbox does not migrate on-chain. {(GRADUATE_SOL - c.curveSol).toFixed(1)} SOL to go.</>}</div>
+            <div className="mt-2 text-xs font-bold text-lav">{grad ? (devnet?'Graduated to Raydium CPMM on Devnet.':'Graduated — sandbox pool target reached.') : <>When the curve reaches {c.graduationTarget || GRADUATE_SOL} SOL, the intended Devnet flow migrates to <span className="text-cream">Raydium CPMM</span>. {devnet?'Migration is completed by Raydium’s authorized migrator.':'This sandbox does not migrate on-chain.'} {Math.max(0,(c.graduationTarget || GRADUATE_SOL) - c.curveSol).toFixed(1)} SOL to go.</>}</div>
           </Card>
           <Card className="p-4">
             <div className="flex items-center justify-between"><div className="flex items-center gap-2 font-extrabold"><IShield s={16} className="text-mint" /> TRUTH</div><Link to={`/truth/${c.ca}`} className="text-xs font-extrabold text-blue hover:underline">Full report →</Link></div>
@@ -227,7 +228,7 @@ function TradePanel({ id }: { id: string }) {
         <R k={`Min received (${slip}% slip)`} v={q ? (side === 'buy' ? fmtCompact(minOut, 2) : `${minOut.toFixed(4)} SOL`) : '—'} />
         <R k={`Fee ${FEES.total}%`} v={q ? `${q.fee.toFixed(4)} SOL` : '—'} />
       </div>
-      {!wallet ? <button onClick={connectWallet} className="btn-candy mt-4 w-full py-3.5">Open sandbox</button> : (
+      {!wallet ? <button onClick={connectWallet} className="btn-candy mt-4 w-full py-3.5">{devnet?'Connect wallet':'Open sandbox'}</button> : (
         <button disabled={!q || !!err} onClick={() => setOpen(true)} className={cx('mt-4 w-full py-3.5 text-base disabled:cursor-not-allowed disabled:opacity-40', side === 'buy' ? 'btn-ice' : 'btn-candy')}>
           {quoting ? 'Getting quote…' : side === 'buy' ? `Buy $${c.ticker}` : `Sell $${c.ticker}`} 
         </button>
@@ -238,7 +239,7 @@ function TradePanel({ id }: { id: string }) {
           { k: 'Receive', v: side === 'buy' ? `${fmtCompact(q.tokens, 2)} $${c.ticker}` : `${q.sol.toFixed(4)} SOL`, strong: true },
           { k: 'Price impact', v: <span className={impactCls}>{q.impact.toFixed(2)}%</span> }, { k: 'Max slippage', v: `${slip}%` },
           { k: 'Fee', v: `${q.fee.toFixed(4)} SOL (${FEES.raydium}% Raydium · ${FEES.creator}% creator · ${FEES.platform}% platform)` },
-          { k: 'Route', v: c.status === 'graduated' ? 'Sandbox pool' : 'Sandbox curve' },
+          { k: 'Route', v: c.status === 'graduated' ? (devnet?'Raydium CPMM':'Sandbox pool') : (devnet?'Raydium LaunchLab':'Sandbox curve') },
         ] : []}
         onConfirm={async () => { if (!q) throw new Error('Review a quote first.'); const result = await trade(q.quoteId); sfx.pop(side === 'buy' ? 1.3 : 0.8); setAmt(''); toast({ kind: 'success', title: `${side === 'buy' ? 'Bought' : 'Sold'} ${fmtCompact(result.tokens, 2)} $${c.ticker}`, body: `${result.sol.toFixed(4)} test SOL · position saved`, coin: c.id }); return result }} />
     </Card>
