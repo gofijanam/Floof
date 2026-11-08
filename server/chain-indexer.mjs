@@ -1,5 +1,7 @@
+import {Buffer} from 'buffer';
+import {decodeWindow,pda,key,discriminator} from './chain-client.mjs';
 import {requireThat} from './errors.mjs';
-import {base58encode,fromBase64,hash,hex} from './crypto.mjs';
+import {base58decode,base58encode,fromBase64,hash,hex} from './crypto.mjs';
 // Borsh layouts emitted by programs/floof-escrow. Amounts stay decimal strings.
 const layouts={WindowCreated:[['window','key'],['creator','key'],['mint','key'],['end','i64']],Pledged:[['window','key'],['wallet','key'],['amount','u64'],['total','u64']],WindowSettled:[['window','key'],['state','u8'],['raised','u64']],Claimed:[['window','key'],['wallet','key'],['tokens','u64'],['refund','u64']],BondSlashed:[['window','key'],['proof_hash','hash']],ScoutFunded:[['epoch','u64'],['root','hash'],['budget','u64']],ScoutClaimed:[['epoch','u64'],['wallet','key'],['amount','u64']]};
 let decoders;
@@ -23,8 +25,21 @@ export async function decodeEvents(tx,program){
  }
  requireThat(stack.length===0,'LOGS','Truncated invocation trace. Retry from an archival RPC.',409);return events;
 }
-export async function ingestFinalized(db,signature,tx,program,now){
- const events=await decodeEvents(tx,program);
+export async function recoverSettlement(tx,program,rpc){
+ requireThat(tx?.meta&&!tx.meta.err&&Number.isSafeInteger(tx.slot)&&tx.meta.logMessages?.includes('Log truncated'),'LOGS','Only a successful runtime-truncated settlement may be recovered.',409);
+ const keys=[...tx.transaction.message.accountKeys.map(k=>typeof k==='string'?k:k.pubkey),...(tx.meta.loadedAddresses?.writable||[]),...(tx.meta.loadedAddresses?.readonly||[])];
+ const instructions=tx.transaction.message.instructions.filter(ix=>keys[ix.programIdIndex]===program);
+ requireThat(instructions.length===1,'LOGS','Ambiguous truncated Floof transaction.',409);
+ const ix=instructions[0],data=Buffer.from(base58decode(ix.data||''));
+ requireThat(data.length===16&&data.subarray(0,8).equals(await discriminator('global:settle_launch'))&&ix.accounts.length===24,'LOGS','Truncated transaction is not a canonical launch settlement.',409);
+ const window=keys[ix.accounts[0]],result=await rpc('getAccountInfo',[window,{encoding:'base64',commitment:'finalized',minContextSlot:tx.slot}]);
+ requireThat(result?.context?.slot>=tx.slot&&result.value?.owner===program,'LOGS','Finalized settlement account evidence is unavailable.',409);
+ const w=await decodeWindow(Buffer.from(result.value.data[0],'base64'));
+ requireThat(pda(['window',w.mint],program).toBase58()===window&&w.mint.toBase58()===keys[ix.accounts[1]]&&w.pool.toBase58()===keys[ix.accounts[7]]&&w.state===1&&w.raised===(w.pledged<w.maxRaise?w.pledged:w.maxRaise),'LOGS','Settlement account does not match the successful instruction.',409);
+ return [{logIndex:-1,kind:'WindowSettled',window,state:w.state,raised:String(w.raised),evidence:'finalized-account-recovery',accountSlot:result.context.slot}];
+}
+export async function ingestFinalized(db,signature,tx,program,now,rpc){
+ let events;try{events=await decodeEvents(tx,program)}catch(e){if(e.code!=='LOGS'||!rpc)throw e;events=await recoverSettlement(tx,program,rpc)}
  // Raw record and event rows commit atomically. Replay repairs missing event rows without duplicates.
  const statements=[db.prepare('INSERT OR IGNORE INTO indexed_transactions (signature,slot,block_time,program_id,body,indexed_at) VALUES (?,?,?,?,?,?)').bind(signature,tx.slot,tx.blockTime,program,JSON.stringify(tx),now),...events.map(e=>db.prepare('INSERT OR IGNORE INTO chain_events (signature,log_index,slot,program_id,window,kind,body,indexed_at) VALUES (?,?,?,?,?,?,?,?)').bind(signature,e.logIndex,tx.slot,program,e.window||`scout:${e.epoch}`,e.kind,JSON.stringify(e),now))];
  const results=await db.batch(statements);return {inserted:results[0].meta.changes,events:results.slice(1).reduce((n,r)=>n+r.meta.changes,0)};
