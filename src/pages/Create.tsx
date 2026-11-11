@@ -12,19 +12,22 @@ import { addCoin, connectWallet, getState, toast, useStore } from '../lib/store'
 import { Accessory, Coin, FEES, SUPPLY } from '../lib/mock'
 import { fmtPrice } from '../lib/format'
 import { api, uploadImage } from '../lib/api'
-import { firstBuyQuote, MAX_FIRST_BUY, MIN_FIRST_BUY, SELL } from '../../server/launchlab-curve.mjs'
+import { firstBuyQuote, MAX_FIRST_BUY, MIN_FIRST_BUY, SELL, MIN_WINDOW_SECS, MAX_WINDOW_SECS, DEFAULT_WINDOW_SECS, MAX_LOCK_DAYS, QUOTES } from '../../server/launchlab-curve.mjs'
 
 const MAX_BUY_SOL = Number(MAX_FIRST_BUY) / 1e9, MIN_BUY_SOL = Number(MIN_FIRST_BUY) / 1e9
 const toLamports = (sol: number) => BigInt(Math.round((Number.isFinite(sol) && sol > 0 ? sol : 0) * 1e9))
 
-const STEPS = ['Details', 'Fair window', 'Bond & lock', 'Review']
+const STEPS = ['Details', 'Fair window', 'Dev buy & pair', 'Review']
+const MIN_WIN = MIN_WINDOW_SECS / 60, MAX_WIN = MAX_WINDOW_SECS / 60
+const LOCK_STOPS = [0, 7, 14, 30, 60, 90, 180, MAX_LOCK_DAYS]
+const fmtSol = (n: number) => (Math.round(n * 100) / 100).toString()
 
 interface Form {
   name: string; ticker: string; desc: string; image: string | null; hue: number; acc: Accessory; x: string; tg: string; web: string
-  startIn: number; maxRaise: string; creatorBuy: string; minTarget: string; walletAge: boolean; balHistory: boolean
-  bond: number; creatorPct: number; vest: number
+  durationMin: number; maxRaise: string; creatorBuy: string; minTarget: string; walletAge: boolean; balHistory: boolean
+  creatorPct: number; lockDays: number; quote: string
 }
-const init: Form = { name: '', ticker: '', desc: '', image: null, hue: 200, acc: 'none', x: '', tg: '', web: '', startIn: 30, maxRaise: '40', creatorBuy: '0', minTarget: '20', walletAge: true, balHistory: false, bond: 5, creatorPct: 2, vest: 90 }
+const init: Form = { name: '', ticker: '', desc: '', image: null, hue: 200, acc: 'none', x: '', tg: '', web: '', durationMin: DEFAULT_WINDOW_SECS / 60, maxRaise: '40', creatorBuy: '0', minTarget: '20', walletAge: true, balHistory: false, creatorPct: 2, lockDays: 90, quote: 'SOL' }
 
 export default function Create() {
   const [f, setF] = useState<Form>(init)
@@ -89,19 +92,22 @@ export default function Create() {
     else if (maxRaise === 0 && minT !== 0) e.minTarget = 'No presale: min target must be 0'
     else if (minT < maxRaise * 0.1) e.minTarget = `At least 10% of max raise (${(maxRaise * 0.1).toFixed(1)} SOL)`
     else if (minT > maxRaise) e.minTarget = 'Cannot exceed max raise'
-    if (wallet && f.bond + 0.02 + reserve + creatorBuy > bal) e.bond = 'Not enough test SOL for the bond, fee and your buy'
+    if (!(Number.isInteger(f.durationMin) && f.durationMin >= MIN_WIN && f.durationMin <= MAX_WIN)) e.durationMin = `Choose ${MIN_WIN}–${MAX_WIN} minutes`
+    if (f.creatorPct > 0 && f.lockDays < 30) e.lockDays = 'A creator allocation needs a lock of at least 30 days'
+    if (!QUOTES.some((q) => q.symbol === f.quote && q.live)) e.quote = 'Only SOL pairs are live right now'
+    if (wallet && !e.creatorBuy && 0.02 + reserve + creatorBuy > bal) e.creatorBuy = 'Not enough test SOL for the fee, reserve and your dev buy'
     return e
   }, [f, maxRaise, creatorBuy, minT, bal, wallet, reserve])
-  const stepFields = [['name', 'ticker', 'desc', 'web', 'x', 'tg'], ['maxRaise', 'creatorBuy', 'minTarget'], ['bond'], []]
+  const stepFields = [['name', 'ticker', 'desc', 'web', 'x', 'tg'], ['durationMin', 'maxRaise', 'minTarget'], ['creatorBuy', 'lockDays', 'quote'], []]
   const stepOk = (i: number) => stepFields[i].every((k) => !errors[k])
   const next = () => { setTouched(true); setChecked(false); if (stepOk(step)) { setStep((s) => Math.min(3, s + 1)); setTouched(false) } }
   const err = (k: string) => (touched || (f as any)[k]) && errors[k]
   const preview: Coin = useMemo(() => {
     const now = Date.now()
     return {
-      id: 'preview', ticker: f.ticker || 'TICKER', name: f.name || 'Your coin', tagline: f.desc, hue: f.hue, accessory: f.acc, creator: 'newfloof', status: 'upcoming', ca: 'pending',
-      windowStart: now + f.startIn * 60e3, windowEnd: now + f.startIn * 60e3 + 600e3, durationMs: 600e3, priceCeiling: ceiling, windowTokens, minTarget: minT, graduationTarget: curve?.graduationSol ?? 0,
-      pledged: 0, pledgers: 0, bondSol: f.bond, lockDays: f.vest, clearingPrice: 0, price: 0, change24h: 0, volume24h: 0, curveSol: 0, holders: 0, snipersBlocked: 0,
+      id: 'preview', ticker: f.ticker || 'TICKER', name: f.name || 'Your coin', tagline: f.desc, hue: f.hue, accessory: f.acc, creator: 'newfloof', status: 'open', ca: 'pending',
+      windowStart: now, windowEnd: now + f.durationMin * 60e3, durationMs: f.durationMin * 60e3, priceCeiling: ceiling, windowTokens, minTarget: minT, graduationTarget: curve?.graduationSol ?? 0,
+      pledged: 0, pledgers: 0, lockDays: f.lockDays, quote: f.quote, clearingPrice: 0, price: 0, change24h: 0, volume24h: 0, curveSol: 0, holders: 0, snipersBlocked: 0,
       truth: { grade: 'N/A', score: 0, realPct: 0, sybilClusters: 0, washPct: 0 }, createdAgo: 0, tags: [],
     }
   }, [f, ceiling, windowTokens, minT, curve])
@@ -113,8 +119,8 @@ export default function Create() {
   if (done) return (
     <div className="mx-auto max-w-xl px-4 pt-32 text-center">
       <motion.div initial={{ scale: 0.5, rotate: -10 }} animate={{ scale: 1, rotate: 0 }} transition={{ type: 'spring', stiffness: 260, damping: 12 }} className="relative mx-auto w-fit"><img src="./mochi/happy.webp" alt="" className="w-56" /><div className="absolute -bottom-2 -right-6 rounded-full bg-night/60 p-1 ring-2 ring-pink/50"><CoinAvatar image={f.image || undefined} hue={f.hue} accessory={f.acc} size={72} mood="happy" /></div></motion.div>
-      <h1 className="h-display mt-4 text-5xl">${f.ticker} is scheduled!</h1>
-      <p className="mt-3 font-bold text-lav">Your fair window opens in {f.startIn} minutes. Bond of {f.bond} SOL is locked. Share the link and gather your floofs.</p>
+      <h1 className="h-display mt-4 text-5xl">${f.ticker} is live!</h1>
+      <p className="mt-3 font-bold text-lav">Your fair window is open now for {f.durationMin} minutes. Share the link and gather your floofs.</p>
       <div className="mt-6 flex flex-wrap justify-center gap-3"><button onClick={() => nav(`/coin/${done}`)} className="btn-candy">Open coin page <IArrow s={16} /></button><button onClick={() => { setF(init); setStep(0); setDone(null); setChecked(false); setDraftNote('') }} className="btn-ghost">Create another</button></div>
     </div>
   )
@@ -122,7 +128,7 @@ export default function Create() {
     <div className="relative mx-auto max-w-[1200px] px-4 pt-24 md:px-6 md:pt-28">
       <PeekMochi src="countdown" />
       <h1 className="h-display text-5xl md:text-6xl">Launch a coin</h1>
-      <p className="mt-2 font-bold text-lav">Set up your coin, its fair window and your bond. Snipers not invited.</p>
+      <p className="mt-2 font-bold text-lav">Set up your coin, its fair window and your dev buy. Snipers not invited.</p>
       <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-xs font-bold text-lav">
         <span role="status">{draftNote || 'Your logo, your token. Launch settings are fixed after creation.'}</span>
         <button className="btn-ghost !px-3 !py-2 !text-xs" onClick={saveDraft} disabled={!wallet || saving || uploading || !draftReady}>{saving ? 'Saving…' : 'Save draft'}</button>
@@ -176,20 +182,19 @@ export default function Create() {
                 </fieldset>
               )}
               {step === 1 && (
-                <div className="space-y-5">
-                  <Field label="Window opens in">
-                    <div className="flex flex-wrap gap-2">{[10, 30, 60, 180, 1440].map((m) => <button key={m} onClick={() => set('startIn', m)} className={cx('rounded-xl px-4 py-2.5 text-sm font-extrabold ring-1', f.startIn === m ? 'bg-blue/15 text-blue ring-blue/50' : 'ring-lav/20')}>{m < 60 ? `${m} min` : m < 1440 ? `${m / 60} h` : '24 h'}</button>)}</div>
-                  </Field>
+                <div className="space-y-6">
+                  <SliderField label="Fair window duration" value={`${f.durationMin} min`} hint="opens the moment your coin is created" error={err('durationMin')}
+                    min={MIN_WIN} max={MAX_WIN} step={5} v={f.durationMin} onChange={(v) => set('durationMin', v)} aria="Fair window duration in minutes" ticks={['5 min', '15', '30', '45', '60 min']} accent="blue" />
+                  <div>
+                    <SliderField label="Presale raise" value={`${fmtSol(maxRaise)} SOL`} hint={`0–${fmtSol(MAX_BUY_SOL - creatorBuy)} SOL · drag or type`} error={err('maxRaise')}
+                      min={0} max={MAX_BUY_SOL - creatorBuy} step={0.5} v={maxRaise} onChange={(v) => { set('maxRaise', fmtSol(v)); if ((parseFloat(f.minTarget) || 0) > v || (v > 0 && (parseFloat(f.minTarget) || 0) < v * 0.1) || v === 0) set('minTarget', fmtSol(v === 0 ? 0 : Math.max(v * 0.5, 0))) }} aria="Presale raise in SOL" ticks={['0', '20', '40', '60', `${fmtSol(MAX_BUY_SOL - creatorBuy)} SOL`]} accent="pink"
+                      input={<input aria-label="Presale raise SOL amount" className="input w-24 !py-1.5 text-right font-num tnum" inputMode="decimal" value={f.maxRaise} onChange={(e) => set('maxRaise', e.target.value.replace(/[^0-9.]/g, ''))} />} />
+                  </div>
                   <div className="grid gap-4 sm:grid-cols-2">
-                    <Locked label="Window length" v="10 minutes" />
-                    <Locked label="Per-account cap" v={`1% of max raise · ${(maxRaise * 0.01).toFixed(2)} SOL`} />
+                    <Field label="Min target (SOL)" error={err('minTarget')} hint="else everyone is refunded"><input aria-label="Minimum target in SOL" className="input font-num tnum" inputMode="decimal" value={f.minTarget} onChange={(e) => set('minTarget', e.target.value.replace(/[^0-9.]/g, ''))} /></Field>
+                    <Locked label="Per-account cap" v={`1% of raise · ${(maxRaise * 0.01).toFixed(2)} SOL`} />
                   </div>
-                  <div className="grid gap-4 sm:grid-cols-3">
-                    <Field label="Presale raise (SOL)" error={err('maxRaise')} hint={`0–${MAX_BUY_SOL}`}><input aria-label="Presale raise in SOL" className="input font-num tnum" inputMode="decimal" value={f.maxRaise} onChange={(e) => set('maxRaise', e.target.value.replace(/[^0-9.]/g, ''))} /></Field>
-                    <Field label="Your buy (SOL)" error={err('creatorBuy')} hint="optional · same price"><input aria-label="Creator buy in SOL" className="input font-num tnum" inputMode="decimal" value={f.creatorBuy} onChange={(e) => set('creatorBuy', e.target.value.replace(/[^0-9.]/g, ''))} /></Field>
-                    <Field label="Min target (SOL)" error={err('minTarget')} hint="else auto-refund"><input aria-label="Minimum target in SOL" className="input font-num tnum" inputMode="decimal" value={f.minTarget} onChange={(e) => set('minTarget', e.target.value.replace(/[^0-9.]/g, ''))} /></Field>
-                  </div>
-                  <CurvePanel curve={curve} raise={maxRaise} creatorBuy={creatorBuy} />
+                  <CurvePanel curve={curve} raise={maxRaise} creatorBuy={creatorBuy} quote={f.quote} />
                   <div>
                     <div className="label mb-2">Anti-sybil</div>
                     <Toggle on locked label="Linked accounts share one cap" />
@@ -202,30 +207,44 @@ export default function Create() {
               {step === 2 && (
                 <div className="space-y-6">
                   <div>
-                    <div className="flex items-end justify-between"><div className="label">Creator bond</div><div className="font-num text-3xl font-semibold text-blue tnum">{f.bond} SOL</div></div>
-                    <input type="range" min={1} max={50} value={f.bond} onChange={(e) => set('bond', +e.target.value)} className="mt-2 w-full accent-[#5FD4FF]" aria-label="Bond SOL" />
-                    {err('bond') && <div className="mt-1 text-xs font-extrabold text-danger">{errors.bond}</div>}
-                    <p className="mt-2 text-sm font-semibold text-lav">{devnet?'The bond can be claimed after a failed window or 30 clean days. Creator tokens unlock after both your selected lock period and Raydium graduation.':'In the sandbox, your bond returns if the target is missed, or after 30 days following creation. Creator tokens stay locked for the period you choose.'}</p>
+                    <div className="mb-2 flex items-end justify-between"><div className="label">Quote pair</div><span className="text-[11px] font-bold text-lav/60">what buyers pay with</span></div>
+                    <div className="grid gap-2 sm:grid-cols-4" role="radiogroup" aria-label="Quote pair">
+                      {QUOTES.map((q) => (
+                        <button key={q.symbol} type="button" role="radio" aria-checked={f.quote === q.symbol} aria-disabled={!q.live} title={q.note || q.name} onClick={() => q.live && set('quote', q.symbol)}
+                          className={cx('relative rounded-2xl px-3 py-3 text-left ring-1 transition', f.quote === q.symbol ? 'bg-pink/15 ring-pink/60' : q.live ? 'ring-lav/20 hover:ring-pink/40' : 'cursor-not-allowed opacity-55 ring-lav/10')}>
+                          <div className="flex items-center justify-between"><span className="font-display text-lg font-extrabold">${f.ticker || 'TOKEN'}/{q.symbol}</span>{f.quote === q.symbol && <ICheck s={14} className="text-pink" />}</div>
+                          <div className="mt-0.5 text-[11px] font-bold text-lav">{q.live ? `${q.name} · migrates at ${q.graduation}` : 'Coming soon'}</div>
+                        </button>
+                      ))}
+                    </div>
+                    <p className="mt-2 text-[11px] font-semibold text-lav/70">Raydium LaunchLab supports more quote mints (USD1, USDC, USDT and others). Floof’s fair-window escrow holds SOL today, so stable pairs arrive once the escrow supports SPL tokens.</p>
                   </div>
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <Field label={`Creator allocation · ${f.creatorPct}%`}><input aria-label="Creator allocation percentage" type="range" min={0} max={5} step={0.5} value={f.creatorPct} onChange={(e) => set('creatorPct', +e.target.value)} className="w-full accent-[#FF5FB8]" /></Field>
-                    <Field label={`Vesting lock · ${f.vest} days`}><input aria-label="Vesting lock days" type="range" min={30} max={180} step={30} value={f.vest} onChange={(e) => set('vest', +e.target.value)} className="w-full accent-[#FF5FB8]" /></Field>
-                  </div>
+                  <SliderField label="Dev buy" value={`${fmtSol(creatorBuy)} SOL`} hint="optional · same clearing price as every pledger" error={err('creatorBuy')}
+                    min={0} max={Math.max(0, Math.min(10, MAX_BUY_SOL - maxRaise))} step={0.1} v={creatorBuy} onChange={(v) => set('creatorBuy', fmtSol(v))} aria="Dev buy in SOL" ticks={['0', `${fmtSol(Math.max(0, Math.min(10, MAX_BUY_SOL - maxRaise)))} SOL`]} accent="blue"
+                    input={<input aria-label="Dev buy SOL amount" className="input w-24 !py-1.5 text-right font-num tnum" inputMode="decimal" value={f.creatorBuy} onChange={(e) => set('creatorBuy', e.target.value.replace(/[^0-9.]/g, ''))} />} />
+                  {curve && creatorBuy > 0 && <div className="grid gap-2 rounded-2xl bg-night/50 p-4 text-sm font-bold ring-1 ring-lav/10 sm:grid-cols-3">
+                    <Stat k="You receive" v={`${(Number(curve.creatorTokens) / 1e12).toFixed(2)}M tokens`} />
+                    <Stat k="Share of supply" v={`${(Number(curve.creatorTokens) / 1e13).toFixed(2)}%`} />
+                    <Stat k="Your price" v={`${fmtPrice(curve.avgPrice)} SOL`} />
+                  </div>}
+                  <SliderField label="Dev token lock" value={f.lockDays === 0 ? 'No lock' : `${f.lockDays} days`} hint="covers your dev buy and creator allocation" error={err('lockDays')}
+                    min={0} max={LOCK_STOPS.length - 1} step={1} v={Math.max(0, LOCK_STOPS.indexOf(f.lockDays))} onChange={(i) => set('lockDays', LOCK_STOPS[i])} aria="Dev token lock" ticks={LOCK_STOPS.map((d) => d === 0 ? 'none' : d < 365 ? `${d}d` : '1y')} accent="mint" />
+                  <SliderField label="Creator allocation" value={`${f.creatorPct}% · ${(f.creatorPct * 10).toFixed(0)}M`} hint="optional · vests through LaunchLab, unlocks after the lock" min={0} max={5} step={0.5} v={f.creatorPct} onChange={(v) => set('creatorPct', v)} aria="Creator allocation percentage" ticks={['0%', '5%']} accent="pink" />
                   <div className="flex items-center gap-4 rounded-2xl bg-mint/10 p-4 ring-1 ring-mint/25">
                     <IShield s={28} className="shrink-0 text-mint" />
-                    <div className="text-sm font-bold"><span className="text-mint">Allocation stays locked.</span> You can claim creator tokens once the lock ends and the window has settled successfully. Reputation follows recorded launch outcomes.</div>
+                    <div className="text-sm font-bold">{f.lockDays > 0 ? <><span className="text-mint">Locked on-chain for {f.lockDays} days.</span> Your dev-buy tokens wait in the window vault and the creator allocation vests; both are claimable after the lock.</> : <><span className="text-mint">No lock.</span> Dev-buy tokens arrive in your wallet at settlement. Buyers see “no lock” on your coin.</>} No bond needed.</div>
                   </div>
                 </div>
               )}
               {step === 3 && (
                 <div className="space-y-4">
                   <div className="divide-y divide-lav/10 rounded-2xl bg-night/50 text-sm ring-1 ring-lav/10">
-                    {[['Coin', `${f.name} · $${f.ticker}`], ['Window', `opens in ${f.startIn} min · 10 min long`], ['First buy', `${(maxRaise + creatorBuy).toFixed(2)} SOL (${maxRaise} presale + ${creatorBuy} you)`], ['Clearing price at full raise', `${fmtPrice(ceiling)} SOL`], ['Supply bought at full raise', `${curve ? curve.pctOfSupply.toFixed(2) : '0'}% · ${(windowTokens / 1e6).toFixed(1)}M to presale`], ['Max raise / min target', `${maxRaise} / ${minT} SOL`], ['Migrates to Raydium at', `~${curve?.graduationSol ?? 85} SOL on the curve`], ['Per-account cap', `${(maxRaise * 0.01).toFixed(2)} SOL`], ['Creator allocation', `${f.creatorPct}% · vest ${f.vest}d`], ['After window', devnet?'Raydium LaunchLab':'Sandbox trading pool'], [devnet?'Trading fee':'Sandbox trading fee', `${FEES.total}% (${FEES.raydium} Raydium · ${FEES.creator} you · ${FEES.platform} platform)`]].map(([k, v]) => (
+                    {[['Coin', `${f.name} · $${f.ticker}`], ['Pair', `$${f.ticker}/${f.quote}`], ['Fair window', `opens at creation · ${f.durationMin} min`], ['First buy', `${(maxRaise + creatorBuy).toFixed(2)} SOL (${fmtSol(maxRaise)} presale + ${fmtSol(creatorBuy)} dev buy)`], ['Clearing price at full raise', `${fmtPrice(ceiling)} SOL`], ['Supply bought at full raise', `${curve ? curve.pctOfSupply.toFixed(2) : '0'}% · ${(windowTokens / 1e6).toFixed(1)}M to presale`], ['Max raise / min target', `${maxRaise} / ${minT} SOL`], ['Migrates to Raydium at', `~${curve?.graduationSol ?? 85} SOL on the curve`], ['Per-account cap', `${(maxRaise * 0.01).toFixed(2)} SOL`], ['Dev lock', f.lockDays ? `${f.lockDays} days` : 'none'], ['Creator allocation', `${f.creatorPct}%`], ['After window', devnet?'Raydium LaunchLab':'Sandbox trading pool'], [devnet?'Trading fee':'Sandbox trading fee', `${FEES.total}% (${FEES.raydium} Raydium · ${FEES.creator} you · ${FEES.platform} platform)`]].map(([k, v]) => (
                       <div key={k} className="flex justify-between gap-4 px-4 py-2.5"><span className="font-bold text-lav">{k}</span><span className="text-right font-extrabold">{v}</span></div>
                     ))}
                   </div>
-                  <div className="flex items-center justify-between rounded-2xl bg-blue/10 px-4 py-3 font-extrabold ring-1 ring-blue/25"><span className="flex items-center gap-2"><ILock s={16} /> Due now</span><span className="font-num tnum">{(f.bond + 0.02 + reserve + creatorBuy).toFixed(2)} test SOL</span></div>
-                  <p className="text-xs font-semibold text-lav">{f.bond} test SOL is refundable bond collateral; 0.02 test SOL is the creation fee. {devnet?'An additional 0.1 test SOL funds pool rent; unused reserve can be reclaimed. Network and account rent are additional. ':''} {wallet ? `Balance after creation: ${(bal - f.bond - 0.02 - reserve).toFixed(2)} test SOL.` : devnet ? 'Connect Phantom with Devnet SOL to continue.' : 'Open your sandbox to receive a test balance.'}</p>
+                  <div className="flex items-center justify-between rounded-2xl bg-blue/10 px-4 py-3 font-extrabold ring-1 ring-blue/25"><span className="flex items-center gap-2"><ILock s={16} /> Due now</span><span className="font-num tnum">{(0.02 + reserve + creatorBuy).toFixed(2)} test SOL</span></div>
+                  <p className="text-xs font-semibold text-lav">0.02 test SOL is the creation fee{creatorBuy > 0 ? `; your ${fmtSol(creatorBuy)} SOL dev buy is escrowed and refunded if the window misses its target` : ''}. {devnet?'An additional 0.1 test SOL funds pool rent; unused reserve can be reclaimed. Network and account rent are additional. ':''} {wallet ? `Balance after creation: ${(bal - 0.02 - reserve - creatorBuy).toFixed(2)} test SOL.` : devnet ? 'Connect Phantom with Devnet SOL to continue.' : 'Open your sandbox to receive a test balance.'}</p>
                   <label className="flex cursor-pointer items-start gap-3 text-sm font-bold text-lav"><input type="checkbox" className="mt-1 h-4 w-4 accent-[#FF5FB8]" checked={checked} onChange={e => setChecked(e.target.checked)} />I reviewed these settings. They cannot be edited after creation. {devnet ? 'This reserves a Devnet launch using test SOL. A token is minted if its window settles successfully.' : 'This creates a test launch with no real SOL or on-chain token.'}</label>
                 </div>
               )}
@@ -236,7 +255,7 @@ export default function Create() {
             {touched && !stepOk(step) && <span className="text-xs font-extrabold text-danger">Fix the highlighted fields</span>}
             {step < 3 ? <button onClick={next} disabled={uploading || !draftReady} className="btn-candy disabled:opacity-40">Continue <IArrow s={16} /></button>
               : !wallet ? <button onClick={connectWallet} className="btn-candy">{devnet?'Connect wallet':'Open sandbox'}</button>
-              : <button onClick={() => setOpen(true)} disabled={!!Object.keys(errors).length || !checked || uploading || saving || !draftReady} className="btn-candy sheen disabled:opacity-40">Create & lock bond</button>}
+              : <button onClick={() => setOpen(true)} disabled={!!Object.keys(errors).length || !checked || uploading || saving || !draftReady} className="btn-candy sheen disabled:opacity-40">Create & open window</button>}
           </div>
         </Card>
         <div className="space-y-3 lg:sticky lg:top-24 lg:self-start">
@@ -244,7 +263,7 @@ export default function Create() {
           <div className="pointer-events-none">{f.image ? <ImgCard f={f} preview={preview} /> : <CoinCard coin={preview} />}</div>
           <Card className="p-4 text-sm font-bold">
             <div className="mb-3 font-extrabold">Supply distribution at full raise</div>
-            {(() => { const presale = curve ? Number(curve.windowTokens) / 1e13 : 0, mine = curve ? Number(curve.creatorTokens) / 1e13 : 0, curveLeft = Math.max(0, Number(SELL) / 1e13 - presale - mine), lp = Math.max(0, 100 - presale - mine - curveLeft - f.creatorPct); const rows: [string, number, string][] = [['Fair window', presale, 'text-pink'], ['Your buy', mine, 'text-blue'], ['Creator · locked', f.creatorPct, 'text-blue'], ['Public curve', curveLeft, 'text-mint'], ['Raydium LP at migration', lp, 'text-lav']]; return <>
+            {(() => { const presale = curve ? Number(curve.windowTokens) / 1e13 : 0, mine = curve ? Number(curve.creatorTokens) / 1e13 : 0, curveLeft = Math.max(0, Number(SELL) / 1e13 - presale - mine), lp = Math.max(0, 100 - presale - mine - curveLeft - f.creatorPct); const rows: [string, number, string][] = [['Fair window', presale, 'text-pink'], ['Dev buy', mine, 'text-blue'], ['Creator · locked', f.creatorPct, 'text-blue'], ['Public curve', curveLeft, 'text-mint'], ['Raydium LP at migration', lp, 'text-lav']]; return <>
               <div className="flex h-3 overflow-hidden rounded-full" aria-label={rows.map(([l, p]) => `${l} ${p.toFixed(1)}%`).join(', ')}><span className="bg-pink" style={{ width: `${presale}%` }} /><span className="bg-blue" style={{ width: `${mine + f.creatorPct}%` }} /><span className="bg-mint" style={{ width: `${curveLeft}%` }} /><span className="flex-1 bg-lav/40" /></div>
               {rows.map(([label, pct, color]) => <div key={label} className="mt-2 flex justify-between text-xs"><span className={color}>{label}</span><span className="font-num tnum">{pct.toFixed(1)}% · {(pct * 10).toFixed(1)}M</span></div>)}</> })()}
           </Card>
@@ -252,7 +271,7 @@ export default function Create() {
         </div>
       </div>
       <TxModal open={open} onClose={() => setOpen(false)} title={`Create $${f.ticker}`} confirmLabel="Create test launch"
-        rows={[{ k: 'Bond (locked)', v: `${f.bond} SOL`, strong: true }, { k: 'Your buy (escrowed)', v: `${creatorBuy} SOL` }, { k: 'Create fee', v: '0.02 SOL' }, { k: 'Window', v: `in ${f.startIn} min` }, { k: 'Programs', v: devnet?'Floof + Raydium LaunchLab':'Floof sandbox ledger' }]}
+        rows={[{ k: 'Dev buy (escrowed)', v: `${fmtSol(creatorBuy)} SOL`, strong: true }, { k: 'Create fee', v: '0.02 SOL' }, { k: 'Fair window', v: `opens now · ${f.durationMin} min` }, { k: 'Pair', v: `$${f.ticker}/${f.quote}` }, { k: 'Programs', v: devnet?'Floof + Raydium LaunchLab':'Floof sandbox ledger' }]}
         note={devnet?'Signs a Devnet launch reservation. The mint and pool are created atomically at successful settlement.':'Creates a persistent sandbox launch. No on-chain mint is created.'} onConfirm={create} />
     </div>
   )
@@ -293,7 +312,7 @@ function Toggle({ on, onChange, label, locked }: { on: boolean; onChange?: (v: b
   )
 }
 
-function CurvePanel({ curve, raise, creatorBuy }: { curve: ReturnType<typeof firstBuyQuote> | null; raise: number; creatorBuy: number }) {
+function CurvePanel({ curve, raise, creatorBuy, quote = 'SOL' }: { curve: ReturnType<typeof firstBuyQuote> | null; raise: number; creatorBuy: number; quote?: string }) {
   if (!curve) return null
   const rows: [string, string][] = [
     ['First buy at full raise', `${(raise + creatorBuy).toFixed(2)} SOL${curve.completes ? ` (curve fills at ${curve.capacitySol.toFixed(3)})` : ''}`],
@@ -305,7 +324,7 @@ function CurvePanel({ curve, raise, creatorBuy }: { curve: ReturnType<typeof fir
   ]
   return (
     <div className="rounded-2xl bg-night/50 p-4 text-sm font-bold ring-1 ring-lav/10" aria-live="polite">
-      <div className="mb-2 flex items-center justify-between"><span className="font-extrabold text-cream">Standard Raydium LaunchLab curve</span><span className="rounded-full bg-mint/15 px-2 py-0.5 text-[11px] font-black text-mint">migrates at ~{curve.graduationSol} SOL</span></div>
+      <div className="mb-2 flex items-center justify-between"><span className="font-extrabold text-cream">Standard Raydium LaunchLab curve · {quote}</span><span className="rounded-full bg-mint/15 px-2 py-0.5 text-[11px] font-black text-mint">migrates at ~{curve.graduationSol} SOL</span></div>
       <div className="mb-3 h-2 overflow-hidden rounded-full bg-lav/10"><div className="h-full rounded-full bg-gradient-to-r from-pink to-blue" style={{ width: `${Math.min(100, curve.curveSolAfter / curve.graduationSol * 100)}%` }} /></div>
       {rows.map(([k, v]) => <div key={k} className="mt-1 flex justify-between gap-3"><span className="text-lav">{k}</span><span className="text-right font-num tnum">{v}</span></div>)}
       <div className="mt-2 flex justify-between"><span className="text-lav">If oversubscribed</span><span>everyone fills pro-rata</span></div>
@@ -313,3 +332,21 @@ function CurvePanel({ curve, raise, creatorBuy }: { curve: ReturnType<typeof fir
     </div>
   )
 }
+
+const ACCENT = { pink: 'accent-[#FF5FB8]', blue: 'accent-[#5FD4FF]', mint: 'accent-[#7CF5C8]' } as const
+const TEXT = { pink: 'text-pink', blue: 'text-blue', mint: 'text-mint' } as const
+function SliderField({ label, value, hint, error, min, max, step, v, onChange, aria, ticks, accent, input }: { label: string; value: string; hint?: string; error?: string | false; min: number; max: number; step: number; v: number; onChange: (v: number) => void; aria: string; ticks?: string[]; accent: keyof typeof ACCENT; input?: React.ReactNode }) {
+  return (
+    <div role="group" aria-label={label}>
+      <div className="flex items-end justify-between gap-3">
+        <div><div className="label">{label}</div>{hint && <div className="mt-0.5 text-[11px] font-bold text-lav/60">{hint}</div>}</div>
+        <div className="flex items-center gap-2">{input}<div className={cx('font-num text-3xl font-semibold tnum', TEXT[accent])}>{value}</div></div>
+      </div>
+      <input type="range" min={min} max={max} step={step} value={Math.min(max, Math.max(min, v))} onChange={(e) => onChange(+e.target.value)} aria-label={aria} aria-valuetext={value}
+        className={cx('mt-3 w-full', ACCENT[accent])} style={{ background: 'transparent' }} />
+      {ticks && <div className="mt-1.5 flex justify-between text-[10px] font-black uppercase text-lav/50">{ticks.map((t, i) => <span key={i}>{t}</span>)}</div>}
+      {error && <div className="mt-1 text-xs font-extrabold text-danger" role="alert">{error}</div>}
+    </div>
+  )
+}
+const Stat = ({ k, v }: { k: string; v: string }) => <div><div className="text-[11px] font-black uppercase text-lav/70">{k}</div><div className="mt-0.5 font-num text-base tnum">{v}</div></div>

@@ -7,7 +7,7 @@ export type Accessory = 'none' | 'bow' | 'leaf' | 'crown' | 'star' | 'boba' | 'h
 
 export interface Creator {
   handle: string; name: string; rep: number; tier: 'Sprout' | 'Puff' | 'Cloud' | 'Legend'
-  bondsPosted: number; bondsReturned: number; launches: number; graduated: number; rugs: number
+  launches: number; graduated: number
   joined: string; followers: number; bio: string; hue: number; accessory: Accessory; wallet: string
 }
 export interface Coin {
@@ -21,7 +21,7 @@ export interface Coin {
   windowTokens: number // tokens sold in window
   minTarget: number // SOL
   pledged: number; pledgers: number
-  bondSol: number; lockDays: number
+  lockDays: number; quote?: string; devLocked?: boolean
   // post-window
   clearingPrice: number; price: number; change24h: number; volume24h: number
   curveSol: number // SOL deposited in LaunchLab curve so far
@@ -54,16 +54,16 @@ export function settle(c: Coin, myPledge = 0) {
 const ACCS: Accessory[] = ['bow', 'leaf', 'crown', 'star', 'boba', 'halo', 'sprout', 'cap', 'phones', 'none']
 
 export const CREATORS: Creator[] = [
-  { handle: 'mochimaker', name: 'Mochi Maker', rep: 94, tier: 'Legend', bondsPosted: 14, bondsReturned: 14, launches: 14, graduated: 9, rugs: 0, joined: 'Mar 2026', followers: 18420, bio: 'Baking squishy coins since the first fair window. Bond always returned, LP always locked.', hue: 200, accessory: 'crown', wallet: 'MoCH1mkr9pQ2vXc7Lw4Rz8TnYb3sKfEuGd6hJaV5' },
-  { handle: 'cloudkitchen', name: 'Cloud Kitchen', rep: 88, tier: 'Cloud', bondsPosted: 9, bondsReturned: 9, launches: 9, graduated: 5, rugs: 0, joined: 'May 2026', followers: 9310, bio: 'Food-themed floofs. Every launch ships with a meme pack and a locked bond.', hue: 330, accessory: 'boba', wallet: 'CLdK1tcHn4Wq8PzR2vL6mXy9bT3sFgE7uJaD5hK' },
-  { handle: 'yuzu_dev', name: 'yuzu.dev', rep: 81, tier: 'Cloud', bondsPosted: 6, bondsReturned: 6, launches: 6, graduated: 3, rugs: 0, joined: 'Jun 2026', followers: 5120, bio: 'Citrus energy. Ships tools for holders, not exits.', hue: 50, accessory: 'leaf', wallet: 'YuZu7dEv3Kq9WpR2mL8xN4bT6sFgH5jCaV1zD' },
-  { handle: 'pastelwizard', name: 'Pastel Wizard', rep: 76, tier: 'Puff', bondsPosted: 4, bondsReturned: 4, launches: 4, graduated: 2, rugs: 0, joined: 'Aug 2026', followers: 3870, bio: 'Casts gentle spells on charts. ✨', hue: 275, accessory: 'star', wallet: 'PsTW1z4rD9qK2mL7xN3bT8vR5sFgH6jCaE1uY' },
-  { handle: 'snootlab', name: 'Snoot Lab', rep: 69, tier: 'Puff', bondsPosted: 3, bondsReturned: 3, launches: 3, graduated: 1, rugs: 0, joined: 'Sep 2026', followers: 2210, bio: 'Research-grade boops.', hue: 160, accessory: 'phones', wallet: 'SnT9La8bQ2wK4mL7xR3zN5vT6sFgH1jCaE9uD' },
-  { handle: 'newfloof', name: 'newfloof', rep: 52, tier: 'Sprout', bondsPosted: 1, bondsReturned: 0, launches: 1, graduated: 0, rugs: 0, joined: 'Nov 2026', followers: 310, bio: 'First launch! Be gentle. Bond is posted 🙏', hue: 120, accessory: 'sprout', wallet: 'NwF1o0f3Kq8WpR2mL9xN4bT7sFgH5jCaV6zD' },
+  { handle: 'mochimaker', name: 'Mochi Maker', rep: 94, tier: 'Legend', launches: 14, graduated: 9, joined: 'Mar 2026', followers: 18420, bio: 'Baking squishy coins since the first fair window. Creator tokens always locked, LP always locked.', hue: 200, accessory: 'crown', wallet: 'MoCH1mkr9pQ2vXc7Lw4Rz8TnYb3sKfEuGd6hJaV5' },
+  { handle: 'cloudkitchen', name: 'Cloud Kitchen', rep: 88, tier: 'Cloud', launches: 9, graduated: 5, joined: 'May 2026', followers: 9310, bio: 'Food-themed floofs. Every launch ships with a meme pack and a 90-day dev lock.', hue: 330, accessory: 'boba', wallet: 'CLdK1tcHn4Wq8PzR2vL6mXy9bT3sFgE7uJaD5hK' },
+  { handle: 'yuzu_dev', name: 'yuzu.dev', rep: 81, tier: 'Cloud', launches: 6, graduated: 3, joined: 'Jun 2026', followers: 5120, bio: 'Citrus energy. Ships tools for holders, not exits.', hue: 50, accessory: 'leaf', wallet: 'YuZu7dEv3Kq9WpR2mL8xN4bT6sFgH5jCaV1zD' },
+  { handle: 'pastelwizard', name: 'Pastel Wizard', rep: 76, tier: 'Puff', launches: 4, graduated: 2, joined: 'Aug 2026', followers: 3870, bio: 'Casts gentle spells on charts. ✨', hue: 275, accessory: 'star', wallet: 'PsTW1z4rD9qK2mL7xN3bT8vR5sFgH6jCaE1uY' },
+  { handle: 'snootlab', name: 'Snoot Lab', rep: 69, tier: 'Puff', launches: 3, graduated: 1, joined: 'Sep 2026', followers: 2210, bio: 'Research-grade boops.', hue: 160, accessory: 'phones', wallet: 'SnT9La8bQ2wK4mL7xR3zN5vT6sFgH1jCaE9uD' },
+  { handle: 'newfloof', name: 'newfloof', rep: 52, tier: 'Sprout', launches: 1, graduated: 0, joined: 'Nov 2026', followers: 310, bio: 'First launch! Be gentle. Dev buy locked 🙏', hue: 120, accessory: 'sprout', wallet: 'NwF1o0f3Kq8WpR2mL9xN4bT7sFgH5jCaV6zD' },
 ]
 let apiCreators: Creator[] = []
 export const setCreators = (creators: Creator[]) => { apiCreators = creators }
-const emptyCreator: Creator = {handle:'pending',name:'Creator',rep:0,tier:'Sprout',bondsPosted:0,bondsReturned:0,launches:0,graduated:0,rugs:0,joined:'—',followers:0,bio:'',hue:200,accessory:'none',wallet:''}
+const emptyCreator: Creator = {handle:'pending',name:'Creator',rep:0,tier:'Sprout',launches:0,graduated:0,joined:'—',followers:0,bio:'',hue:200,accessory:'none',wallet:''}
 export const creatorBy = (h: string) => apiCreators.find((c) => c.handle === h) ?? {...emptyCreator,handle:h,name:h}
 
 type Seed = [string, string, string, number, Accessory, string, CoinStatus, Grade, string[]]
@@ -130,7 +130,7 @@ export function buildCoins(now: number): Coin[] {
       ca: fakeAddr(r, 44, 'fLF'),
       windowStart: windowEnd - durationMs, windowEnd, durationMs, priceCeiling, windowTokens, minTarget,
       pledged, pledgers,
-      bondSol: [10, 5, 5, 2, 1][Math.floor(r() * 5)] * (creator === 'mochimaker' ? 2 : 1), lockDays: [30, 60, 90, 180][Math.floor(r() * 4)],
+      lockDays: [30, 60, 90, 180][(r(), Math.floor(r() * 4))], quote: 'SOL',
       clearingPrice: clearing, price: clearing * mult, change24h: (r() - 0.35) * 80,
       volume24h: status === 'open' || status === 'upcoming' ? 0 : (40 + r() * 900) * 1000,
       curveSol: status === 'graduated' ? GRADUATE_SOL : status === 'curve' ? 12 + r() * 64 : 0,

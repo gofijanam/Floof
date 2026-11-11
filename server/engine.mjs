@@ -1,6 +1,6 @@
 import {AppError,requireThat} from './errors.mjs';
 import {LAMPORTS as L,UNITS as U,SUPPLY,mulDiv,allocation,curveQuote,fixed} from './math.mjs';
-import {firstBuyQuote,MAX_FIRST_BUY,MIN_FIRST_BUY} from './launchlab-curve.mjs';
+import {firstBuyQuote,MAX_FIRST_BUY,MIN_FIRST_BUY,MIN_WINDOW_SECS,MAX_WINDOW_SECS,DEFAULT_WINDOW_SECS,MAX_LOCK_DAYS} from './launchlab-curve.mjs';
 const DAYS=86400000;
 export const blankTruth=()=>({grade:'N/A',score:0,realPct:0,sybilClusters:0,washPct:0,status:'insufficient_data',sampleSize:0,source:'sandbox',checks:[],clusters:{nodes:[],edges:[]}});
 export function seedState(templates,now=Date.now()){
@@ -9,7 +9,7 @@ export function seedState(templates,now=Date.now()){
     const active=i<5,curve=i>=9;
     const start=active?now-60000:curve?now-3600000:now+(i-4)*600000;
     const sol=curve?30*L:0;state.grants+=sol;
-    state.coins[t.id]={...t,ca:`sandbox-${t.id}`,creatorId:null,createdAt:now,windowStart:start,windowEnd:active?now+24*3600000:start+600000,durationMs:active?24*3600000+60000:600000,status:curve?'curve':active?'open':'upcoming',price:curve?30/600e6:0,clearingPrice:curve?30/300e6:0,pledged:0,pledgers:0,holders:0,volume24h:0,change24h:0,snipersBlocked:0,curveSol:sol/L,bondSol:0,truth:blankTruth(),tags:[...t.tags,'sandbox'],example:true,maxRaiseL:Math.round(t.priceCeiling*t.windowTokens*L),minTargetL:Math.round(t.minTarget*L),windowUnits:Math.round(t.windowTokens*U),pledges:{},bondL:0,bondState:'example',creatorUnits:0,vestAt:0,pool:{sol,tokens:curve?600e6*U:0},refundVault:0,tokenVault:0,raisedL:0,settledAt:curve?now:0,revision:0};
+    state.coins[t.id]={...t,ca:`sandbox-${t.id}`,creatorId:null,createdAt:now,windowStart:start,windowEnd:active?now+24*3600000:start+600000,durationMs:active?24*3600000+60000:600000,status:curve?'curve':active?'open':'upcoming',price:curve?30/600e6:0,clearingPrice:curve?30/300e6:0,pledged:0,pledgers:0,holders:0,volume24h:0,change24h:0,snipersBlocked:0,curveSol:sol/L,truth:blankTruth(),tags:[...t.tags,'sandbox'],example:true,maxRaiseL:Math.round(t.priceCeiling*t.windowTokens*L),minTargetL:Math.round(t.minTarget*L),windowUnits:Math.round(t.windowTokens*U),pledges:{},creatorUnits:0,vestAt:0,pool:{sol,tokens:curve?600e6*U:0},refundVault:0,tokenVault:0,raisedL:0,settledAt:curve?now:0,revision:0};
   }
   return state;
 }
@@ -23,7 +23,9 @@ export function validateCoin(f,now){
   requireThat(name.length>=2&&name.length<=32,'NAME','Name must be 2–32 characters.');
   requireThat(/^[A-Z0-9]{2,10}$/.test(ticker),'TICKER','Ticker must be 2–10 letters or digits.');
   requireThat(desc.length<=160,'DESCRIPTION','Description must be at most 160 characters.');
-  requireThat([10,30,60,180,1440].includes(f.startIn),'START','Choose an available start time.');
+  // The fair window opens at creation; its length is the creator's choice within program bounds.
+  const durationMin=f.durationMin??DEFAULT_WINDOW_SECS/60;requireThat(Number.isInteger(durationMin)&&durationMin*60>=MIN_WINDOW_SECS&&durationMin*60<=MAX_WINDOW_SECS,'DURATION',`Fair window must last ${MIN_WINDOW_SECS/60}–${MAX_WINDOW_SECS/60} minutes.`);
+  requireThat((f.quote??'SOL')==='SOL','QUOTE','Only SOL pairs are live right now.');
   // The presale is the first buy on the standard LaunchLab curve (85 SOL graduation).
   const solOrZero=v=>v===undefined||v===null||v===''||Number(v)===0?0:fixed(v),maxRaiseL=solOrZero(f.maxRaise),creatorBuyL=solOrZero(f.creatorBuy),firstBuyL=BigInt(maxRaiseL)+BigInt(creatorBuyL);
   requireThat(firstBuyL>=MIN_FIRST_BUY&&firstBuyL<=MAX_FIRST_BUY,'RAISE',`Raise plus creator buy must be ${Number(MIN_FIRST_BUY)/L}–${Number(MAX_FIRST_BUY)/L} SOL.`);
@@ -31,8 +33,7 @@ export function validateCoin(f,now){
   const quote=firstBuyQuote({raise:BigInt(maxRaiseL),creatorBuy:BigInt(creatorBuyL),locked:BigInt(Math.round(SUPPLY*f.creatorPct/100))}),windowUnits=Number(quote.windowTokens),price=quote.avgPrice;
   const minTargetL=solOrZero(f.minTarget);
   requireThat((maxRaiseL===0?minTargetL===0:minTargetL>=maxRaiseL/10)&&minTargetL<=maxRaiseL,'TARGET','Minimum target must be 10–100% of the maximum raise.');
-  requireThat(Number.isInteger(f.bond)&&f.bond>=1&&f.bond<=50,'BOND','Bond must be 1–50 SOL.');
-  requireThat([30,60,90,120,150,180].includes(f.vest),'VESTING','Choose a 30–180 day lock.');
+  const lockDays=f.lockDays??0;requireThat(Number.isInteger(lockDays)&&lockDays>=0&&lockDays<=MAX_LOCK_DAYS,'LOCK',`Dev lock must be 0–${MAX_LOCK_DAYS} days.`);requireThat(f.creatorPct===0||lockDays>=30,'LOCK','A creator allocation needs a lock of at least 30 days.');
   requireThat(typeof f.creatorPct==='number'&&f.creatorPct>=0&&f.creatorPct<=5&&Number.isInteger(f.creatorPct*2),'CREATOR_ALLOCATION','Creator allocation must be 0–5%.');
   const links={};for(const key of ['web','tg','x']){
    let value=String(f[key]||'').trim();requireThat(value.length<=256,'LINK','Link too long.');
@@ -44,15 +45,15 @@ export function validateCoin(f,now){
   const image=f.image||null;requireThat(!image||/^\/api\/images\/[a-f0-9]{64}\.(png|jpg|gif|webp)$/.test(image),'IMAGE','Upload the image before creating the coin.');
   requireThat(['none','bow','leaf','crown','star','boba','halo','sprout','cap','phones'].includes(f.acc??'none'),'ACCESSORY','Invalid mascot style.');
   requireThat(Number.isInteger(f.hue??200)&&(f.hue??200)>=0&&(f.hue??200)<=359,'COLOR','Invalid color.');
-  return {name,ticker,tagline:desc,hue:f.hue??200,accessory:f.acc??'none',priceCeiling:price,maxRaiseL,creatorBuyL,minTargetL,windowUnits,graduationTarget:quote.graduationSol,windowTokens:windowUnits/U,minTarget:minTargetL/L,bondL:f.bond*L,bondSol:f.bond,creatorUnits:Math.round(SUPPLY*f.creatorPct/100),creatorPct:f.creatorPct,lockDays:f.vest,windowStart:now+f.startIn*60000,windowEnd:now+(f.startIn+10)*60000,durationMs:600000,links,image,policy:{walletAge:!!f.walletAge,balHistory:!!f.balHistory}};
+  return {name,ticker,tagline:desc,hue:f.hue??200,accessory:f.acc??'none',priceCeiling:price,maxRaiseL,creatorBuyL,minTargetL,windowUnits,graduationTarget:quote.graduationSol,windowTokens:windowUnits/U,minTarget:minTargetL/L,creatorUnits:Math.round(SUPPLY*f.creatorPct/100),creatorPct:f.creatorPct,lockDays,quote:'SOL',windowStart:now,windowEnd:now+durationMin*60000,durationMs:durationMin*60000,links,image,policy:{walletAge:!!f.walletAge,balHistory:!!f.balHistory}};
 }
 export function createCoin(s,id,f,now){
  const a=account(s,id),v=validateCoin(f,now);requireThat(!Object.values(s.coins).some(c=>c.ticker===v.ticker),'TICKER_EXISTS','This ticker is already taken.',409);
  requireThat(Object.keys(s.coins).length<500,'CAPACITY','Development coin limit reached.',503);
- requireThat(a.balance>=v.bondL+0.02*L,'BALANCE','Insufficient sandbox SOL for the bond and fee.',409);
+ requireThat(a.balance>=0.02*L,'BALANCE','Insufficient sandbox SOL for the creation fee.',409);
  const cid=`${v.ticker.toLowerCase()}-${crypto.randomUUID().slice(0,8)}`;
- const c={...v,id:cid,ca:`sandbox-${cid}`,creator:`floof-${id.slice(0,8)}`,creatorId:id,status:'upcoming',createdAt:now,pledged:0,pledgers:0,clearingPrice:0,price:0,change24h:0,volume24h:0,curveSol:0,holders:0,snipersBlocked:0,truth:blankTruth(),createdAgo:0,tags:['sandbox'],pledges:{},bondState:'locked',vestAt:now+v.lockDays*DAYS,pool:{sol:0,tokens:0},refundVault:0,tokenVault:0,raisedL:0,settledAt:0,revision:0};
- a.balance-=v.bondL+0.02*L;s.fees.platform+=0.02*L;s.coins[cid]=c;addEvent(s,c,a,'create',v.bondL,now);return {coin:cid};
+ const c={...v,id:cid,ca:`sandbox-${cid}`,creator:`floof-${id.slice(0,8)}`,creatorId:id,status:'open',createdAt:now,pledged:0,pledgers:0,clearingPrice:0,price:0,change24h:0,volume24h:0,curveSol:0,holders:0,snipersBlocked:0,truth:blankTruth(),createdAgo:0,tags:['sandbox'],pledges:{},vestAt:now+v.lockDays*DAYS,pool:{sol:0,tokens:0},refundVault:0,tokenVault:0,raisedL:0,settledAt:0,revision:0};
+ a.balance-=0.02*L;s.fees.platform+=0.02*L;s.coins[cid]=c;addEvent(s,c,a,'create',0.02*L,now);return {coin:cid};
 }
 export function pledge(s,id,b,now){
  const a=account(s,id),c=coin(s,b.coin),amount=fixed(b.amount);
@@ -78,15 +79,11 @@ export function settleCoin(s,c,now){
  c.refundVault=refunds;c.tokenVault=tokens;c.pool={sol:filled,tokens:failed?0:SUPPLY-c.windowUnits-c.creatorUnits};c.price=c.pool.tokens?c.pool.sol/L/(c.pool.tokens/U):0;c.curveSol=c.pool.sol/L;
  // Pro-rata SOL rounding dust belongs to refunds; using sum(filled) conserves every lamport.
  c.raisedL=filled;
- if(failed&&c.creatorId&&c.bondState==='locked'){const a=s.accounts[c.creatorId];a.balance+=c.bondL;c.bondL=0;c.bondState='returned';addEvent(s,c,a,'bond_return',c.bondSol*L,now)}
  c.revision++;addEvent(s,c,null,failed?'refunding':'settle',filled,now);return true;
 }
 export function tick(s,now){let changed=false;for(const c of Object.values(s.coins)){
  if(c.status==='upcoming'&&now>=c.windowStart&&now<c.windowEnd){c.status='open';changed=true}
  if(settleCoin(s,c,now))changed=true;
- if(c.creatorId&&c.bondState==='locked'&&now>=c.createdAt+30*DAYS&&c.status!=='upcoming'&&c.status!=='open'){
-  const a=s.accounts[c.creatorId];a.balance+=c.bondL;addEvent(s,c,a,'bond_return',c.bondL,now);c.bondL=0;c.bondState='returned';changed=true;
- }
 }return changed}
 export function claim(s,id,b,now){
  const a=account(s,id);requireThat(typeof b.id==='string'&&b.id.length<160,'CLAIM','Invalid claim identifier.');
@@ -138,8 +135,8 @@ export function truthFor(s,c){
  return {grade:score>=97?'A+':score>=90?'A':score>=78?'B':score>=60?'C':'D',score,realPct,sybilClusters:new Set([...linked].map(id=>s.accounts[id].cluster)).size,washPct,sampleSize:trades.length,status:'heuristic',source:'sandbox',clusters:{nodes:buyers.map(id=>({id,wallet:s.accounts[id].wallet,linked:linked.has(id)})),edges},checks:[{id:'sample',ok:true,label:`${trades.length} recorded sandbox trades`},{id:'clusters',ok:linked.size===0,label:'No linked accounts among observed buyers'},{id:'wash',ok:washPct<8,label:'Rapid round-trip volume below 8%'}]};
 }
 export function creator(s,handle,now=Date.now()){
- const coins=Object.values(s.coins).filter(c=>c.creator===handle),owner=coins.find(c=>c.creatorId)?.creatorId,a=owner?s.accounts[owner]:null;const returned=coins.filter(c=>c.bondState==='returned').length,slashed=coins.filter(c=>c.bondState==='slashed').length,graduated=coins.filter(c=>c.status==='graduated').length,rep=Math.max(0,Math.min(100,returned*10+graduated*15-slashed*35));
- return {handle,name:a?'Your Floof':handle,rep,tier:rep>=90?'Legend':rep>=75?'Cloud':rep>=50?'Puff':'Sprout',bondsPosted:coins.filter(c=>c.bondSol>0).length,bondsReturned:returned,launches:coins.length,graduated,rugs:slashed,joined:new Date(a?.createdAt||s.createdAt).toLocaleDateString('en',{month:'short',year:'numeric'}),followers:Object.values(s.follows).filter(list=>list.includes(handle)).length,bio:a?'Building fair launches in the Floof sandbox.':'Example creator · sandbox launch fixtures.',hue:coins[0]?.hue||200,accessory:coins[0]?.accessory||'none',wallet:a?.linkedWallet||a?.wallet||'Sandbox fixture',history:s.events.filter(e=>coins.some(c=>c.id===e.coin)&&['create','bond_return','settle','slash'].includes(e.kind)).map(e=>({t:e.kind==='create'?'Bond posted':e.kind==='bond_return'?'Bond returned':e.kind==='settle'?'Window settled':'Bond slashed',d:`$${e.ticker} · ${new Date(e.t).toISOString()}`,v:`${e.amount.toFixed(3)} SOL`,ok:e.kind!=='slash'}))};
+ const coins=Object.values(s.coins).filter(c=>c.creator===handle),owner=coins.find(c=>c.creatorId)?.creatorId,a=owner?s.accounts[owner]:null;const real=coins.filter(c=>!c.example),graduated=coins.filter(c=>c.status==='graduated').length,rep=Math.max(0,Math.min(100,real.length*5+real.filter(c=>c.status==='graduated').length*20));
+ return {handle,name:a?'Your Floof':handle,rep,tier:rep>=90?'Legend':rep>=75?'Cloud':rep>=50?'Puff':'Sprout',launches:coins.length,graduated,joined:new Date(a?.createdAt||s.createdAt).toLocaleDateString('en',{month:'short',year:'numeric'}),followers:Object.values(s.follows).filter(list=>list.includes(handle)).length,bio:a?'Building fair launches in the Floof sandbox.':'Example creator · sandbox launch fixtures.',hue:coins[0]?.hue||200,accessory:coins[0]?.accessory||'none',wallet:a?.linkedWallet||a?.wallet||'Sandbox fixture',history:s.events.filter(e=>coins.some(c=>c.id===e.coin)&&['create','settle','refunding'].includes(e.kind)).map(e=>({t:e.kind==='create'?'Launch created':e.kind==='settle'?'Window settled':'Window refunded',d:`$${e.ticker} · ${new Date(e.t).toISOString()}`,v:`${e.amount.toFixed(3)} SOL`,ok:e.kind!=='refunding'}))};
 }
 export function publicCoin(s,c,now){const trades=s.trades.filter(t=>t.coin===c.id&&t.t>=now-DAYS);return Object.fromEntries(Object.entries({...c,pledged:Object.values(c.pledges).reduce((n,p)=>n+p.amount,0)/L,truth:truthFor(s,c),createdAgo:now-c.createdAt,holders:Object.values(s.accounts).filter(a=>(a.positions[c.id]?.tokens||0)>0).length,volume24h:trades.reduce((n,t)=>n+t.amount,0),change24h:trades.length?(c.price/trades[0].price-1)*100:0}).filter(([k])=>!['pledges','creatorId','maxRaiseL','minTargetL','windowUnits','bondL','creatorUnits','pool','refundVault','tokenVault','raisedL'].includes(k)))}
 export function snapshot(s,id,now=Date.now()){
@@ -152,7 +149,7 @@ export function snapshot(s,id,now=Date.now()){
 }
 export function holders(s,c){const rows=Object.values(s.accounts).map(a=>({wallet:a.linkedWallet||a.wallet,tokens:a.positions[c.id]?.tokens||0,tag:''})).filter(a=>a.tokens>0);if(c.pool.tokens)rows.push({wallet:'Sandbox pool',tokens:c.pool.tokens,tag:'curve'});if(c.tokenVault)rows.push({wallet:'Unclaimed window tokens',tokens:c.tokenVault,tag:'window'});if(c.creatorUnits)rows.push({wallet:'Creator vesting vault',tokens:c.creatorUnits,tag:'vesting'});return rows.sort((a,b)=>b.tokens-a.tokens).map(r=>({...r,pct:r.tokens/SUPPLY*100,tokens:r.tokens/U}))}
 export function candles(s,c,tf='1h'){const ms={'5m':300000,'1h':3600000,'4h':14400000,'1d':DAYS}[tf];requireThat(ms,'TIMEFRAME','Unsupported candle timeframe.');const groups=new Map();for(const t of s.trades.filter(t=>t.coin===c.id)){const key=Math.floor(t.t/ms)*ms;if(!groups.has(key))groups.set(key,[key,t.price,t.price,t.price,t.price,t.amount]);else {const g=groups.get(key);g[2]=Math.max(g[2],t.price);g[3]=Math.min(g[3],t.price);g[4]=t.price;g[5]+=t.amount}}return [...groups.values()].slice(-500)}
-export function audit(s){let sum=s.fees.protocol+s.fees.platform;for(const a of Object.values(s.accounts)){sum+=a.balance+a.creatorFees;for(const cl of a.claims)if(!cl.claimed)sum+=cl.amountL;requireThat(a.balance>=0&&Object.values(a.positions).every(p=>p.tokens>=0&&p.cost>=0),'INVARIANT','Negative account balance.',500)}for(const c of Object.values(s.coins)){sum+=c.bondL+c.pool.sol+c.refundVault;if(!c.settledAt)sum+=Object.values(c.pledges).reduce((n,p)=>n+p.amount,0);requireThat(c.pool.sol>=0&&c.pool.tokens>=0&&c.refundVault>=0&&c.tokenVault>=0,'INVARIANT','Negative vault balance.',500)}requireThat(sum===s.grants,'INVARIANT',`Ledger conservation failed: ${sum} != ${s.grants}`,500);return {credits:s.grants,accounted:sum,balanced:true}}
+export function audit(s){let sum=s.fees.protocol+s.fees.platform;for(const a of Object.values(s.accounts)){sum+=a.balance+a.creatorFees;for(const cl of a.claims)if(!cl.claimed)sum+=cl.amountL;requireThat(a.balance>=0&&Object.values(a.positions).every(p=>p.tokens>=0&&p.cost>=0),'INVARIANT','Negative account balance.',500)}for(const c of Object.values(s.coins)){sum+=c.pool.sol+c.refundVault;if(!c.settledAt)sum+=Object.values(c.pledges).reduce((n,p)=>n+p.amount,0);requireThat(c.pool.sol>=0&&c.pool.tokens>=0&&c.refundVault>=0&&c.tokenVault>=0,'INVARIANT','Negative vault balance.',500)}requireThat(sum===s.grants,'INVARIANT',`Ledger conservation failed: ${sum} != ${s.grants}`,500);return {credits:s.grants,accounted:sum,balanced:true}}
 export function command(s,id,kind,b,now=Date.now()){
  tick(s,now);let result;
  switch(kind){

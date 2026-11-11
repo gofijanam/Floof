@@ -101,7 +101,7 @@ export default function CoinLive() {
         {/* sidebar */}
         <div className="space-y-5 lg:sticky lg:top-24 lg:self-start">
           <PledgeForm coinId={c.id} />
-          <CreatorCard handle={c.creator} bond={c.bondSol} lockDays={c.lockDays} />
+          <CreatorCard handle={c.creator} lockDays={c.lockDays} />
           {!upcoming && (
             <Card className="flex items-center justify-between gap-3 p-4">
               <div className="text-xs font-bold text-lav"><span className="font-extrabold text-cream">Demo control</span><br />Fast-forward this window to zero.</div>

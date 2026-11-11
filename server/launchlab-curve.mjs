@@ -8,6 +8,18 @@ export const SUPPLY=1_000_000_000_000_000n, SELL=793_100_000_000_000n, GRADUATIO
 export const FEES={protocol:2500n,platform:5000n,creator:2500n},FEE_RATE=FEES.protocol+FEES.platform+FEES.creator,FEE_DENOMINATOR=1_000_000n;
 // Configurable cap on raise + creator buy. Must match MAX_FIRST_BUY in the program.
 export const MAX_FIRST_BUY=86_000_000_000n, MIN_FIRST_BUY=10_000_000n;
+// Fair window opens at creation and lasts MIN..MAX seconds (program-enforced). One creator lock covers
+// the creator allocation (>=30 days when used) and the dev buy (0 = delivered at settlement).
+export const MIN_WINDOW_SECS=300, MAX_WINDOW_SECS=3600, DEFAULT_WINDOW_SECS=600, MAX_LOCK_DAYS=365;
+// Quote pairs. Verified on Devnet LaunchLab (DRay6f…tcm6) GlobalConfigs: SOL (index 0, used by Floof),
+// a second SOL config, a Devnet USDC test mint and two unnamed test mints. Mainnet LaunchLab also has
+// USDC, USDT and USD1 configs. Floof escrow holds pledges in lamports, so only SOL is live.
+export const QUOTES=[
+ {symbol:'SOL',name:'Solana',mint:'So11111111111111111111111111111111111111112',live:true,graduation:'85 SOL'},
+ {symbol:'USD1',name:'World Liberty USD',mint:'USD1ttGY1N17NEEHLmELoaybftRBUSErhqYiQzvEmuB',live:false,graduation:'stablecoin target',note:'LaunchLab mainnet quote · needs SPL-token escrow'},
+ {symbol:'USDC',name:'USD Coin',mint:'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v',live:false,graduation:'stablecoin target',note:'LaunchLab quote (Devnet test config exists) · needs SPL-token escrow'},
+ {symbol:'USDT',name:'Tether USD',mint:'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB',live:false,graduation:'stablecoin target',note:'LaunchLab mainnet quote · needs SPL-token escrow'},
+];
 const ceil=(a,b)=>(a+b-1n)/b;
 /** Virtual reserves for the standard curve (SDK LaunchConstantProductCurve.getInitParam). */
 export function standardCurve({locked=0n,supply=SUPPLY,totalSell=SELL,target=GRADUATION_QUOTE,migrateFee=MIGRATE_FEE}={}){

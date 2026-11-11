@@ -7,3 +7,6 @@ export declare function curveCapacity(o?:{locked?:bigint}):bigint;
 export declare function splitFirstBuy(budget:bigint,creatorBuy:bigint,spent:bigint,tokens:bigint):{creatorSpent:bigint;creatorTokens:bigint};
 export interface FirstBuyQuote{budget:bigint;spent:bigint;fee:bigint;tokens:bigint;completes:boolean;unspent:bigint;creatorSpent:bigint;creatorTokens:bigint;windowTokens:bigint;pledgeSpent:bigint;pctOfSupply:number;pctOfCurve:number;avgPrice:number;startPrice:number;spotAfter:number;impliedMcapSol:number;mcapAfterSol:number;curveSolAfter:number;remainingToMigrateSol:number;remainingToMigrateGrossSol:number;graduationSol:number;capacitySol:number}
 export declare function firstBuyQuote(o?:{raise?:bigint;creatorBuy?:bigint;locked?:bigint}):FirstBuyQuote;
+export declare const MIN_WINDOW_SECS:number, MAX_WINDOW_SECS:number, DEFAULT_WINDOW_SECS:number, MAX_LOCK_DAYS:number;
+export interface QuotePair{symbol:string;name:string;mint:string;live:boolean;graduation:string;note?:string}
+export declare const QUOTES:QuotePair[];

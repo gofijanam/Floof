@@ -106,7 +106,7 @@ function ListView({ list, now }: { list: Coin[]; now: number }) {
     <div className="glass overflow-x-auto rounded-3xl" data-cursor="native">
       <table className="w-full min-w-[860px] text-sm">
         <thead><tr className="text-left text-[11px] font-black uppercase tracking-wider text-lav/70">
-          {['Coin', 'Status', 'Escrow / Mcap', 'Ceiling / Price', 'Progress', 'TRUTH', 'Creator', 'Bond'].map((h) => <th key={h} className="px-4 py-3 font-black">{h}</th>)}
+          {['Coin', 'Status', 'Escrow / Mcap', 'Ceiling / Price', 'Progress', 'TRUTH', 'Creator', 'Dev lock'].map((h) => <th key={h} className="px-4 py-3 font-black">{h}</th>)}
         </tr></thead>
         <tbody>
           {list.map((c) => {
@@ -121,7 +121,7 @@ function ListView({ list, now }: { list: Coin[]; now: number }) {
                 <td className="w-40 px-4 py-3">{c.status === 'open' ? <MiniMeter coin={c} /> : <div className="h-2 rounded-full bg-night"><div className="h-full rounded-full bg-gradient-to-r from-lav to-pink" style={{ width: `${(c.curveSol / graduationOf(c)) * 100}%` }} /></div>}</td>
                 <td className="px-4 py-3"><GradeBadge g={c.truth.grade} /></td>
                 <td className="px-4 py-3 text-xs">@{cr.handle} <span className="text-mint tnum">{cr.rep}</span></td>
-                <td className="px-4 py-3 font-num text-blue tnum">{c.bondSol} SOL</td>
+                <td className="px-4 py-3 font-num text-blue tnum">{c.lockDays ? `${c.lockDays}d` : '—'}</td>
               </tr>
             )
           })}

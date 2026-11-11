@@ -6,17 +6,17 @@ import { FEES, GRADUATE_SOL } from '../lib/mock'
 import { IChevron } from '../components/icons'
 
 const STEPS = [
-  ['Creator sets up', 'Coin details, a presale size (0–86 SOL), an optional creator buy, a min target and a SOL bond. Creator allocation vests on a lock.'],
-  ['10-minute fair window', 'Anyone pledges SOL into escrow. Max 1% of the presale per wallet; linked wallets share one cap.'],
+  ['Creator sets up', 'Coin details, a fair-window length (5–60 min), a presale size (0–86 SOL), a min target, an optional dev buy, a dev lock and the quote pair (SOL today). No bond.'],
+  ['Fair window (5–60 min)', 'The window opens the moment the coin is created. Anyone pledges SOL into escrow. Max 1% of the presale per wallet; linked wallets share one cap.'],
   ['Zero', 'Under min target → everyone refunded. Otherwise the presale (plus the creator buy) becomes the first buy on Raydium LaunchLab, executed atomically with pool creation. Oversubscribed → everyone fills pro-rata.'],
   ['Bonding curve', `Trading continues on Raydium LaunchLab’s standard curve (1B supply, 793.1M sold on the curve). It migrates to a Raydium CPMM pool once ~${GRADUATE_SOL} SOL has been raised.`],
-  ['Rewards', 'Window tickets, Scout rewards for early holders, creator bond returned on a clean launch.'],
+  ['Rewards', 'Window tickets and Scout rewards for early holders.'],
 ]
 const FAQ = [
   ['Why can’t snipers get in?', 'The pool is created and the window’s first buy executes in the same instruction, so nobody can trade before the presale. Being faster changes nothing.'],
   ['What’s the clearing price?', 'The average price of the combined first buy (presale + creator buy) on the standard LaunchLab curve. Everyone in the window — creator included — pays the same price. The Create page shows it live for any raise.'],
   ['What is TRUTH?', 'An indexer that clusters wallets by funding source and behaviour to estimate the share of real buyers vs sybils, bundles and wash trades, graded A+ to D.'],
-  ['Can the creator rug?', 'The creator posts a SOL bond and their allocation vests. Early dumping or provable fake volume can slash the bond to holders through the oracle flow.'],
+  ['Can the creator rug?', 'The creator buys at the same clearing price as everyone else, and can lock the dev buy and creator allocation on-chain (up to 365 days) — the lock length is shown on every coin. Floof cannot stop a creator from selling unlocked tokens; check the lock and TRUTH grade before you pledge.'],
   ['Is this live?', 'This deployment runs on Solana Devnet with test SOL only. No mainnet funds are involved.'],
 ]
 export default function Docs() {

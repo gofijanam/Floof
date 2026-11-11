@@ -32,7 +32,7 @@ export default function Creator() {
           <div className="text-center"><RepRing v={c.rep} size={120} stroke={9} /><div className="label mt-2">reputation</div></div>
         </div>
         <div className="relative mt-6 grid grid-cols-2 gap-3 md:grid-cols-5" data-cursor="native">
-          {[['Launches', c.launches], ['Graduated', c.graduated], ['Bonds posted', c.bondsPosted], ['Bonds returned', `${c.bondsReturned}/${c.bondsPosted}`], ['Rugs / slashes', c.rugs]].map(([k, v]) => (
+          {[['Launches', c.launches], ['Graduated', c.graduated], ['Graduation rate', `${c.launches ? Math.round(c.graduated / c.launches * 100) : 0}%`], ['Followers', c.followers], ['Joined', c.joined]].map(([k, v]) => (
             <div key={k as string} className="rounded-2xl bg-night/50 p-4 ring-1 ring-lav/10"><div className="label">{k}</div><div className="mt-1 font-num text-2xl font-semibold tnum">{v}</div></div>
           ))}
         </div>
@@ -43,7 +43,7 @@ export default function Creator() {
           <div className="mt-3 grid gap-4 md:grid-cols-2">{coins.map((x) => <CoinCard key={x.id} coin={x} />)}</div>
         </div>
         <Card className="p-5 lg:self-start">
-          <div className="flex items-center gap-2 font-display text-xl font-extrabold"><IShield s={18} className="text-mint" /> Bond & rep history</div>
+          <div className="flex items-center gap-2 font-display text-xl font-extrabold"><IShield s={18} className="text-mint" /> Launch history</div>
           <div className="relative mt-4 space-y-4 pl-6 before:absolute before:bottom-2 before:left-2 before:top-2 before:w-px before:bg-lav/20">
             {history.map((h: any, i: number) => (
               <div key={i} className="relative">
@@ -53,7 +53,7 @@ export default function Creator() {
               </div>
             ))}
           </div>
-          <div className="mt-5 flex items-center gap-2 rounded-2xl bg-blue/10 p-3 text-xs font-extrabold text-blue ring-1 ring-blue/20"><ILock s={14} /> Sandbox reputation is computed from recorded bond outcomes. It is not an on-chain risk rating.</div>
+          <div className="mt-5 flex items-center gap-2 rounded-2xl bg-blue/10 p-3 text-xs font-extrabold text-blue ring-1 ring-blue/20"><ILock s={14} /> Reputation is computed from recorded launches and graduations. It is not an on-chain risk rating.</div>
         </Card>
       </div>
     </div>

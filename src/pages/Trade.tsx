@@ -140,7 +140,7 @@ export default function Trade() {
               </div>
             </div>
           </Card>
-          <CreatorCard handle={c.creator} bond={c.bondSol} lockDays={c.lockDays} />
+          <CreatorCard handle={c.creator} lockDays={c.lockDays} />
         </div>
       </div>
     </div>

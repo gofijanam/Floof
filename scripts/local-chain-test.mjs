@@ -14,7 +14,7 @@ if(process.argv.includes('--setup')){
  await send([createPlatformConfig(LAUNCHLAB,admin.publicKey,admin.publicKey,admin.publicKey,admin.publicKey,platform,cp,admin.publicKey,{platformScale:new BN(0),creatorScale:new BN(0),burnScale:new BN(1000000)},new BN(5000),new BN(2500),'Floof','https://floof.fun','',new BN(0))]);
  await send([await initializeIx(admin.publicKey,platform,attestor.publicKey,oa.publicKey,ob.publicKey)]);
  const now=(await c.getBlockTime(await c.getSlot()))||Math.floor(Date.now()/1000),start=now+10;
- const v={nonce:1,name:'Atomic Floof',symbol:'ATFLF',uri:'https://example.com/metadata.json',walletAge:false,history:false,start,end:start+600,minTarget:1e9,maxRaise:10e9,creatorBuy:0n,creatorTokens:10_000_000_000_000n,bond:1e9,lockDays:30};
+ const v={nonce:1,name:'Atomic Floof',symbol:'ATFLF',uri:'https://example.com/metadata.json',walletAge:false,history:false,duration:600,minTarget:1e9,maxRaise:10e9,creatorBuy:0n,creatorTokens:10_000_000_000_000n,lockDays:30};
  const live=await createIx(admin.publicKey,platform,admin.publicKey,v),failed=await createIx(admin.publicKey,platform,admin.publicKey,{...v,nonce:2,name:'Refund Floof',symbol:'RFFLF'});
  await send([live.instruction]);await send([failed.instruction]);assert.equal(await c.getAccountInfo(live.addresses.mint),null);
  const users=Array.from({length:11},()=>Keypair.generate());await send(users.map(w=>SystemProgram.transfer({fromPubkey:admin.publicKey,toPubkey:w.publicKey,lamports:2e9})));

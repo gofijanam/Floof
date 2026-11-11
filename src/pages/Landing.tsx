@@ -91,7 +91,7 @@ function Hero({ ready }: { ready: boolean }) {
         </div>
         <div className="relative z-20 [grid-area:bottom] lg:self-start">
           <motion.p {...H} transition={{ delay: 0.45, duration: 0.6 }} className="mt-2 max-w-md text-lg font-semibold text-lav md:text-xl lg:mt-6">
-            A 10-minute fair window. Everyone pledges into one cloud, then <span className="text-cream">all buy together at one price, in one block.</span> Snipers get poof’d.
+            A short fair window (5–60 min). Everyone pledges into one cloud, then <span className="text-cream">all buy together at one price, in one block.</span> Snipers get poof’d.
           </motion.p>
           <motion.div {...H} transition={{ delay: 0.55, duration: 0.6 }} className="mt-8 flex flex-wrap items-center gap-3">
             <Magnetic><Link to={featuredPath} className="btn-candy sheen px-7 py-4 text-base">{active ? `Join the $${floof.ticker} window` : 'Explore launches'} <IArrow s={18} /></Link></Magnetic>
@@ -100,7 +100,7 @@ function Hero({ ready }: { ready: boolean }) {
           <motion.div {...H} transition={{ delay: 0.65, duration: 0.6 }} className="mt-8 hidden gap-6 text-sm font-bold text-lav sm:flex">
             <span className="flex items-center gap-1.5"><IShield s={16} className="text-mint" /> no snipers</span>
             <span className="flex items-center gap-1.5"><IUsers s={16} className="text-blue" /> 1% wallet cap</span>
-            <span className="flex items-center gap-1.5"><ILock s={16} className="text-pink" /> creator bond</span>
+            <span className="flex items-center gap-1.5"><ILock s={16} className="text-pink" /> creator lock</span>
           </motion.div>
         </div>
 
@@ -200,7 +200,7 @@ function Marquee() {
 
 /* ------------------------------------------------------------------ SCROLL STORY (pinned) */
 const BEATS = [
-  { k: '01', t: 'Floofs gather.', d: 'A 10-minute fair window opens with a price ceiling. Everyone pledges SOL into one escrow cloud — max 1% per wallet, anti-sybil checks on every pledge.' },
+  { k: '01', t: 'Floofs gather.', d: 'A 5–60 minute fair window opens the moment a coin is created. Everyone pledges SOL into one escrow cloud — max 1% per wallet, anti-sybil checks on every pledge.' },
   { k: '02', t: 'One cloud. One price.', d: 'No one buys early. At zero, the cloud settles: hit the min target or everyone is auto-refunded. Oversubscribed? Everyone fills pro-rata.' },
   { k: '03', t: 'POOF! A coin is born.', d: 'Every pledger buys together, at one price, in one block. Snipers and bundlers are locked outside. Then trading opens on a Raydium LaunchLab curve → graduates to CPMM.' },
 ]
@@ -352,7 +352,7 @@ const ROWS: [string, string, string, string][] = [
   ['Price for early supporters', 'One price for all, capped by ceiling', 'Rises with every tx', 'Fixed, but gated'],
   ['If the launch underfills', 'Auto-refund, every lamport', 'You hold the bag', 'Manual refunds (maybe)'],
   ['Whale protection', '1% cap per wallet + anti-sybil', 'None', 'Tiers'],
-  ['Creator accountability', 'SOL bond + on-chain reputation', 'None', 'Off-chain promises'],
+  ['Creator accountability', 'Dev buy at the same price + on-chain lock', 'None', 'Off-chain promises'],
   ['Real vs fake buys', 'TRUTH grade on every coin', '—', '—'],
 ]
 function Compare() {
@@ -390,7 +390,7 @@ function Finale() {
         <div className="pointer-events-none absolute inset-0 opacity-60" style={{ background: 'radial-gradient(60% 80% at 50% 110%, rgba(255,95,184,.35), transparent 70%), radial-gradient(40% 60% at 10% 0%, rgba(95,212,255,.25), transparent 70%)' }} />
         <motion.img src="./mochi/happy.webp" alt="" className="relative mx-auto w-48 md:w-60" whileHover={{ scale: 1.08, rotate: -4 }} whileTap={{ scale: 0.9 }} onTap={(e) => { sfx.poof(); const t = e.target as HTMLElement; const r = t.getBoundingClientRect(); confetti({ x: r.left + r.width / 2, y: r.top + r.height / 2, n: 60 }) }} animate={{ y: [0, -10, 0] }} transition={{ y: { repeat: Infinity, duration: 3 } }} />
         <h2 className="h-display relative mt-4 text-5xl md:text-8xl">Ready to <span className="text-candy">floof?</span></h2>
-        <p className="relative mx-auto mt-4 max-w-lg text-lg font-semibold text-lav">Launch with a bond, a fair window and a TRUTH grade — or join one before zero.</p>
+        <p className="relative mx-auto mt-4 max-w-lg text-lg font-semibold text-lav">Launch with a fair window, one clearing price and a TRUTH grade — or join one before zero.</p>
         <div className="relative mt-8 flex flex-wrap justify-center gap-3">
           <Magnetic><Link to="/create" className="btn-candy sheen px-8 py-4 text-base"><ISparkle s={18} /> Launch a coin</Link></Magnetic>
           <Magnetic strength={0.2}><Link to="/explore" className="btn-ice px-8 py-4 text-base">Find a window</Link></Magnetic>

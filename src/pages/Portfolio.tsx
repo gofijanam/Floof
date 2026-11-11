@@ -95,7 +95,7 @@ export default function Portfolio() {
           <div className="space-y-3">{claims.map((cl) => { const c = coins.find((x) => x.id === cl.coin)!; return (
             <Card key={cl.id} className="flex flex-wrap items-center gap-4 p-4">
               <CoinAvatar image={c.image} hue={c.hue} accessory={c.accessory} size={44} />
-              <div className="min-w-0 flex-1"><div className="font-extrabold">{cl.kind === 'refund' ? 'Window claim' : cl.kind === 'vesting' ? 'Vested tokens' : cl.kind === 'fees' ? 'Creator fees' : 'Scout reward'} · ${c.ticker}</div><div className="text-xs font-bold text-lav">{cl.note}{cl.tokens > 0 ? ` · ${fmtCompact(cl.tokens)} tokens` : ''}</div></div>
+              <div className="min-w-0 flex-1"><div className="font-extrabold">{cl.kind === 'refund' ? 'Window claim' : cl.kind === 'vesting' ? 'Vested tokens' : cl.kind === 'dev-buy' ? 'Dev buy unlocked' : cl.kind === 'creator-buy-refund' ? 'Dev buy refund' : cl.kind === 'fees' ? 'Creator fees' : 'Scout reward'} · ${c.ticker}</div><div className="text-xs font-bold text-lav">{cl.note}{cl.tokens > 0 ? ` · ${fmtCompact(cl.tokens)} tokens` : ''}</div></div>
               <div className="font-num text-lg font-semibold tnum">{cl.amount.toFixed(3)} SOL</div>
               {cl.claimed ? <span className="chip text-mint"><ICheck s={13} /> claimed</span> : <button onClick={() => setClaimId(cl.id)} className="btn-candy px-5 py-2 text-sm">Claim</button>}
             </Card>
@@ -103,7 +103,7 @@ export default function Portfolio() {
         )}
       </div>
       <TxModal open={!!pendingClaim && !pendingClaim.claimed} onClose={() => setClaimId(null)} title="Claim" accent="blue" confirmLabel="Confirm claim"
-        rows={pendingClaim ? [{ k: 'Amount', v: `${pendingClaim.amount.toFixed(3)} SOL`, strong: true }, { k: 'Source', v: pendingClaim.kind === 'refund' ? 'Escrow refund' : 'Scout rewards vault' }] : []}
+        rows={pendingClaim ? [{ k: 'Amount', v: `${pendingClaim.amount.toFixed(3)} SOL`, strong: true }, { k: 'Source', v: pendingClaim.kind === 'refund' || pendingClaim.kind === 'creator-buy-refund' ? 'Escrow refund' : pendingClaim.kind === 'dev-buy' ? 'Window token vault' : 'Scout rewards vault' }] : []}
         onConfirm={() => claimId && claim(claimId)} />
     </div>
   )

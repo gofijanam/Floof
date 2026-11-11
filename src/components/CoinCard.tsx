@@ -32,7 +32,7 @@ export const CoinCard = memo(forwardRef<HTMLDivElement, { coin: Coin }>(function
             <div className="mt-1 flex items-center gap-1.5 text-[11px] font-extrabold text-lav/80">
               <span className="h-2.5 w-2.5 rounded-full" style={{ background: `hsl(${cr.hue} 90% 70%)` }} />@{cr.handle}
               <span className="text-mint tnum">rep {cr.rep}</span>
-              <span className="inline-flex items-center gap-0.5 text-blue tnum"><ILock s={11} />{c.bondSol} SOL bond</span>
+              <span className="inline-flex items-center gap-0.5 text-blue tnum"><ILock s={11} />{c.lockDays ? `${c.lockDays}d lock` : 'no lock'}</span>
             </div>
           </div>
           <StatusPill c={c} />

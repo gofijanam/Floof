@@ -3,7 +3,7 @@ import {decodeWindow,pda,key,discriminator} from './chain-client.mjs';
 import {requireThat} from './errors.mjs';
 import {base58decode,base58encode,fromBase64,hash,hex} from './crypto.mjs';
 // Borsh layouts emitted by programs/floof-escrow. Amounts stay decimal strings.
-const layouts={WindowCreated:[['window','key'],['creator','key'],['mint','key'],['end','i64']],Pledged:[['window','key'],['wallet','key'],['amount','u64'],['total','u64']],WindowSettled:[['window','key'],['state','u8'],['raised','u64']],Claimed:[['window','key'],['wallet','key'],['tokens','u64'],['refund','u64']],BondSlashed:[['window','key'],['proof_hash','hash']],ScoutFunded:[['epoch','u64'],['root','hash'],['budget','u64']],ScoutClaimed:[['epoch','u64'],['wallet','key'],['amount','u64']]};
+const layouts={WindowCreated:[['window','key'],['creator','key'],['mint','key'],['end','i64']],Pledged:[['window','key'],['wallet','key'],['amount','u64'],['total','u64']],WindowSettled:[['window','key'],['state','u8'],['raised','u64']],Claimed:[['window','key'],['wallet','key'],['tokens','u64'],['refund','u64']],ScoutFunded:[['epoch','u64'],['root','hash'],['budget','u64']],ScoutClaimed:[['epoch','u64'],['wallet','key'],['amount','u64']]};
 let decoders;
 async function eventDecoders(){return decoders??=Promise.all(Object.entries(layouts).map(async([kind,fields])=>[(await hash('event:'+kind)).slice(0,16),kind,fields]))}
 export async function decodeEvents(tx,program){
@@ -49,12 +49,11 @@ export async function chainWindow(db,program,window){
  requireThat(rows.results.length<=1000,'HISTORY_LIMIT','Window projection exceeds the inline history limit.',503);
  // Cross-transaction order inside a slot is not guessed. Pledged total is the maximum
  // cumulative on-chain total, claims are per-wallet and lifecycle is monotonic.
- const projection={window,program,network:'devnet',source:'finalized-chain-events',created:null,pledgedLamports:'0',settlement:null,claims:[],slash:null,events:rows.results.length};
+ const projection={window,program,network:'devnet',source:'finalized-chain-events',created:null,pledgedLamports:'0',settlement:null,claims:[],events:rows.results.length};
  for(const row of rows.results){const e=JSON.parse(row.body),evidence={signature:row.signature,slot:row.slot};
   if(e.kind==='WindowCreated')projection.created={...e,...evidence};
   if(e.kind==='Pledged'&&BigInt(e.total)>BigInt(projection.pledgedLamports))projection.pledgedLamports=e.total;
   if(e.kind==='WindowSettled')projection.settlement={...e,...evidence};
   if(e.kind==='Claimed')projection.claims.push({...e,...evidence});
-  if(e.kind==='BondSlashed')projection.slash={...e,...evidence};
  }return projection;
 }

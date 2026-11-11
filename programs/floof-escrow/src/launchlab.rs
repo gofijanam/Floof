@@ -111,13 +111,15 @@ pub fn settle(ctx:Context<SettleLaunch>)->Result<()>{
  // curve (status != 0, migration pending) may leave quote unspent; that quote is refunded below.
  require!(bought>0&&spent<=budget&&(spent==budget||status!=0),ErrCode::Amount);
  let (creator_spent,creator_tokens)=split_first_buy(budget,creator_buy,spent,bought)?;let window_tokens=bought-creator_tokens;let pledge_spent=spent-creator_spent;
- if creator_tokens>0{token::transfer(CpiContext::new_with_signer(a.token_program.to_account_info(),Transfer{from:a.buyer_base.to_account_info(),to:a.creator_base.to_account_info(),authority:a.launcher.to_account_info()},&[launcher_seeds]),creator_tokens)?;}
+ // Unlocked dev buys go straight to the creator; locked ones wait in the window vault (claim_dev_buy).
+ let dev_locked=a.window.vest_at>a.window.created_at;
+ if creator_tokens>0{token::transfer(CpiContext::new_with_signer(a.token_program.to_account_info(),Transfer{from:a.buyer_base.to_account_info(),to:if dev_locked{a.claim_vault.to_account_info()}else{a.creator_base.to_account_info()},authority:a.launcher.to_account_info()},&[launcher_seeds]),creator_tokens)?;}
  if window_tokens>0{token::transfer(CpiContext::new_with_signer(a.token_program.to_account_info(),Transfer{from:a.buyer_base.to_account_info(),to:a.claim_vault.to_account_info(),authority:a.launcher.to_account_info()},&[launcher_seeds]),window_tokens)?;}
  token::close_account(CpiContext::new_with_signer(a.token_program.to_account_info(),CloseAccount{account:a.buyer_quote.to_account_info(),destination:a.launcher.to_account_info(),authority:a.launcher.to_account_info()},&[launcher_seeds]))?;
  if budget>spent{anchor_lang::system_program::transfer(CpiContext::new_with_signer(a.system_program.to_account_info(),anchor_lang::system_program::Transfer{from:a.launcher.to_account_info(),to:a.window.to_account_info()},&[launcher_seeds]),budget-spent)?;}
  let creator_refund=creator_buy-creator_spent;if creator_refund>0{move_lamports(&a.window.to_account_info(),&a.creator.to_account_info(),creator_refund)?;}
  if a.window.creator_tokens>0{let mut d=vec![129,178,2,13,217,172,230,218];d.extend_from_slice(&a.window.creator_tokens.to_le_bytes());raw_cpi(a.launchlab.to_account_info(),vec![(a.launcher.to_account_info(),true,true),(a.window.to_account_info(),true,false),(a.pool.to_account_info(),true,false),(a.vesting_record.to_account_info(),true,false),(a.system_program.to_account_info(),false,false)],d,&[launcher_seeds])?;}
- let w=&mut ctx.accounts.window;w.raised=pledge_spent;w.window_tokens=window_tokens;w.creator_buy_tokens=creator_tokens;w.state=LIVE;w.pool=ctx.accounts.pool.key();w.fundraising_target=GRADUATION_QUOTE;emit!(WindowSettled{window:w.key(),state:w.state,raised:pledge_spent});emit!(FirstBuy{window:w.key(),spent,bought,creator_spent,creator_tokens,migration_pending:status!=0});Ok(())
+ let w=&mut ctx.accounts.window;w.raised=pledge_spent;w.window_tokens=window_tokens;w.creator_buy_tokens=creator_tokens;w.dev_claimed=!dev_locked||creator_tokens==0;w.state=LIVE;w.pool=ctx.accounts.pool.key();w.fundraising_target=GRADUATION_QUOTE;emit!(WindowSettled{window:w.key(),state:w.state,raised:pledge_spent});emit!(FirstBuy{window:w.key(),spent,bought,creator_spent,creator_tokens,migration_pending:status!=0});Ok(())
 }
 #[event]pub struct FirstBuy{pub window:Pubkey,pub spent:u64,pub bought:u64,pub creator_spent:u64,pub creator_tokens:u64,pub migration_pending:bool}
 #[derive(Accounts)]pub struct ClaimReserve<'info>{
