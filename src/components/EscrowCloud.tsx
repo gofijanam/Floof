@@ -22,7 +22,7 @@ export function EscrowCloud({ coin, compact = false }: { coin: Coin; compact?: b
   const friends = useMemo(() => [[200, 0.2, 120], [330, 0.55, 330], [430, 0.35, 52], [265, 0.8, 285], [380, 0.12, 165]] as const, [])
   return (
     <div className="relative">
-      <svg viewBox="0 0 600 380" className="w-full overflow-visible" role="img" aria-label={`Escrow ${coin.pledged.toFixed(1)} of ${cap.toFixed(0)} SOL`}>
+      <svg viewBox="0 0 600 380" className="w-full overflow-visible" role="img" aria-label={`Escrow ${coin.pledged.toFixed(1)} of ${cap.toFixed(0)} ${coin.quote ?? 'SOL'}`}>
         <defs>
           <clipPath id={`c${id}`}><CloudShapes /></clipPath>
           <linearGradient id={`l${id}`} x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#7FE0FF" /><stop offset=".5" stopColor="#B69CFF" /><stop offset="1" stopColor="#FF5FB8" /></linearGradient>

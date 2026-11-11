@@ -57,13 +57,13 @@ export default function Poof() {
           ))}
         </h1>
         <motion.p initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.9 }} className="relative mx-auto mt-6 max-w-xl text-lg font-bold text-lav md:text-xl">
-          {failed ? <>The ${c.ticker} window missed its {c.minTarget} SOL min target. Every pledge is available to refund — no harm, no foul.</> : <><span className="text-cream">${c.ticker} is born.</span> {c.pledgers.toLocaleString()} floofs bought together at one clearing price in the sandbox ledger.</>}
+          {failed ? <>The ${c.ticker} window missed its {c.minTarget} {c.quote ?? 'SOL'} min target. Every pledge is available to refund — no harm, no foul.</> : <><span className="text-cream">${c.ticker} is born.</span> {c.pledgers.toLocaleString()} floofs bought together at one clearing price in the sandbox ledger.</>}
         </motion.p>
         <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1.1 }} className="relative mt-5 flex flex-wrap justify-center gap-2">
           <span className="chip text-mint"><IUsers s={13} /> {c.pledgers.toLocaleString()} buyers</span>
           <span className="chip text-blue"><IBolt s={13} /> sandbox settlement</span>
           <span className="chip text-danger"><IGhost s={13} /> {c.snipersBlocked} snipers locked out</span>
-          <span className="chip tnum">price {failed ? '—' : fmtPrice(st.price)} SOL</span>
+          <span className="chip tnum">price {failed ? '—' : fmtPrice(st.price)} {c.quote ?? 'SOL'}</span>
         </motion.div>
       </section>
 
@@ -71,14 +71,14 @@ export default function Poof() {
         <Card neon="p" className="p-5 text-left md:p-6" data-cursor="native">
           <div className="flex items-center gap-3">
             <motion.div layoutId={`avatar-${c.id}`}><CoinAvatar image={c.image} hue={c.hue} accessory={c.accessory} size={56} mood="happy" /></motion.div>
-            <div><div className="font-display text-2xl font-extrabold">Your share</div><div className="text-sm font-bold text-lav">{mine ? `You pledged ${mine.toFixed(3)} SOL` : 'You didn’t pledge in this window'}</div></div>
+            <div><div className="font-display text-2xl font-extrabold">Your share</div><div className="text-sm font-bold text-lav">{mine ? `You pledged ${mine.toFixed(3)} ${c.quote ?? 'SOL'}` : 'You didn’t pledge in this window'}</div></div>
           </div>
           {mine > 0 ? (
             <>
               <div className="mt-5 grid grid-cols-2 gap-3">
                 <Big k="Tokens received" v={Math.round(st.myTokens).toLocaleString()} s={`$${c.ticker}`} accent="text-pink" />
-                <Big k="Refund" v={`${st.myRefund.toFixed(3)}`} s="SOL back to you" accent="text-blue" />
-                <Big k="Filled" v={`${st.myFilled.toFixed(3)}`} s={`SOL · ${(st.fill * 100).toFixed(1)}% pro-rata`} />
+                <Big k="Refund" v={`${st.myRefund.toFixed(3)}`} s={`${c.quote ?? 'SOL'} back to you`} accent="text-blue" />
+                <Big k="Filled" v={`${st.myFilled.toFixed(3)}`} s={`${c.quote ?? 'SOL'} · ${(st.fill * 100).toFixed(1)}% pro-rata`} />
                 <Big k="Your price" v={failed ? '—' : fmtPrice(st.price)} s="same as everyone" />
               </div>
               {st.over && <div className="mt-3 rounded-2xl bg-pink/10 px-3 py-2 text-xs font-extrabold text-pink ring-1 ring-pink/20">Oversubscribed {st.oversub.toFixed(2)}× — everyone filled {(st.fill * 100).toFixed(1)}% and the rest is refunded.</div>}
@@ -104,7 +104,7 @@ export default function Poof() {
         </div>
       </motion.section>
       <TxModal open={open} onClose={() => setOpen(false)} title="Claim" confirmLabel="Confirm claim" accent="blue"
-        rows={[{ k: 'Tokens', v: `${Math.round(st.myTokens).toLocaleString()} $${c.ticker}`, strong: true }, { k: 'Refund', v: `${st.myRefund.toFixed(3)} SOL` }, { k: 'Network fee', v: '~0.000005 SOL' }]}
+        rows={[{ k: 'Tokens', v: `${Math.round(st.myTokens).toLocaleString()} $${c.ticker}`, strong: true }, { k: 'Refund', v: `${st.myRefund.toFixed(3)} ${c.quote ?? 'SOL'}` }, { k: 'Network fee', v: '~0.000005 SOL' }]}
         onConfirm={async () => { const result = await claim(`window:${c.id}`); setClaimed(true); return result }} />
     </motion.div>
   )

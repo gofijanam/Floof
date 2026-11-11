@@ -45,13 +45,13 @@ export const CoinCard = memo(forwardRef<HTMLDivElement, { coin: Coin }>(function
                 <div className="text-right"><div className="label">ceiling</div><div className="font-num text-sm font-semibold tnum">{fmtPrice(c.priceCeiling)}</div></div>
               </div>
               <MiniMeter coin={c} />
-              <div className="mt-2 flex justify-between text-[11px] font-bold text-lav/70 tnum"><span>{c.pledgers} floofs</span><span>cap {walletCap(c).toFixed(2)} SOL / wallet</span></div>
+              <div className="mt-2 flex justify-between text-[11px] font-bold text-lav/70 tnum"><span>{c.pledgers} floofs</span><span>cap {walletCap(c).toFixed(2)} {c.quote ?? 'SOL'} / wallet</span></div>
             </>
           )}
           {c.status === 'upcoming' && (
             <div className="grid grid-cols-3 gap-2 rounded-2xl bg-night/50 p-3 ring-1 ring-lav/10">
               <div><div className="label">opens in</div><div className="font-num text-sm font-semibold text-blue tnum">{hms(c.windowStart - now)}</div></div>
-              <div><div className="label">min target</div><div className="font-num text-sm font-semibold tnum">{c.minTarget} SOL</div></div>
+              <div><div className="label">min target</div><div className="font-num text-sm font-semibold tnum">{c.minTarget} {c.quote ?? 'SOL'}</div></div>
               <div><div className="label">lock</div><div className="font-num text-sm font-semibold tnum">{c.lockDays}d</div></div>
             </div>
           )}

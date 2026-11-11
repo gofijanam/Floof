@@ -9,6 +9,10 @@ import {verifiedConfig,rpcClient,fetchWindow} from './chain-rpc.mjs';
 import {key,creatorIx,createIx,pledgeIxs,claimIxs,settleIx,instruction,meta,rewardClaimIx} from './chain-client.mjs';
 import {walletEvidence,checkEligibility,clusterFor,signPledge} from './sybil-service.mjs';
 import {ingestFinalized} from './chain-indexer.mjs';
+import {createQuoteIxs,pledgeQuoteIxs,settleQuoteIx,claimQuoteIxs,creatorQuoteIx,isSolWindow} from './quote-client.mjs';
+import {attestTarget,quoteRegistry,toQuoteUnits} from './quotes.mjs';
+const WSOL_MINT='So11111111111111111111111111111111111111112';
+async function windowQuote(rpc,w,program){const q=(await quoteRegistry(rpc,program)).find(q=>q.global===w.global.toBase58());requireThat(q,'QUOTE','This launch\u2019s quote is not registered.',409);return {...q,tokenProgram:key(q.tokenProgram),mint:key(q.mint),global:key(q.global)}}
 const integer=(v,name)=>{requireThat(/^(0|[1-9]\d*)$/.test(String(v))&&BigInt(v)<=0xffffffffffffffffn,'AMOUNT',`${name} must be an unsigned base-unit integer.`);return BigInt(v)};
 export async function prepareChain(env,db,owner,wallet,b,now=Date.now()){
  const rpc=rpcClient(env),config=await verifiedConfig(env,rpc);requireThat(!config.paused,'PAUSED','Devnet execution is paused.',503);let ixs,expected={};
@@ -20,11 +24,32 @@ export async function prepareChain(env,db,owner,wallet,b,now=Date.now()){
   requireThat(typeof v.name==='string'&&Buffer.byteLength(v.name)>=2&&Buffer.byteLength(v.name)<=32&&typeof v.symbol==='string'&&/^[A-Za-z0-9]{2,10}$/.test(v.symbol),'METADATA','Invalid token name or symbol.');
   let uri;try{uri=new URL(v.uri)}catch{}requireThat(uri?.protocol==='https:'&&!uri.username&&!uri.password&&Buffer.byteLength(v.uri)<=200,'METADATA','Use an HTTPS metadata URI of at most 200 bytes.');
   const p={...v,duration};for(const n of ['nonce','minTarget','maxRaise','creatorBuy'])p[n]=integer(v[n]??'0',n);
-  requireThat(p.maxRaise+p.creatorBuy>=MIN_FIRST_BUY&&p.maxRaise+p.creatorBuy<=MAX_FIRST_BUY&&p.minTarget>=p.maxRaise/10n&&p.minTarget<=p.maxRaise,'RAISE','Invalid raise limits.');requireThat(Number.isInteger(p.lockDays)&&p.lockDays>=0&&p.lockDays<=MAX_LOCK_DAYS,'LOCK','Invalid dev lock.');requireThat((p.quote??'SOL')==='SOL','QUOTE','Only SOL pairs are live on Devnet.');
+  requireThat(p.maxRaise+p.creatorBuy>=MIN_FIRST_BUY&&p.maxRaise+p.creatorBuy<=MAX_FIRST_BUY&&p.minTarget>=p.maxRaise/10n&&p.minTarget<=p.maxRaise,'RAISE','Invalid raise limits.');requireThat(Number.isInteger(p.lockDays)&&p.lockDays>=0&&p.lockDays<=MAX_LOCK_DAYS,'LOCK','Invalid dev lock.');
   requireThat(typeof p.walletAge==='boolean'&&typeof p.history==='boolean','POLICY','Eligibility settings must be booleans.');
-  const c=await createIx(wallet,config.platform,config.treasury,p,config.program);ixs=[c.instruction];expected={window:c.addresses.window.toBase58(),mint:c.addresses.mint.toBase58(),creatorReserveLamports:'100000000',creationFeeLamports:'20000000',creatorBuyLamports:String(p.creatorBuy)};
+  const quoteMint=typeof v.quoteMint==='string'&&v.quoteMint?v.quoteMint:WSOL_MINT;
+  if(quoteMint===WSOL_MINT){const c=await createIx(wallet,config.platform,config.treasury,p,config.program);ixs=[c.instruction];expected={window:c.addresses.window.toBase58(),mint:c.addresses.mint.toBase58(),creatorReserveLamports:'100000000',creationFeeLamports:'20000000',creatorBuyLamports:String(p.creatorBuy)};}
+  else{
+   // Amounts arrive as SOL-equivalent lamports; convert at the attested target (USD value of 85 SOL in this quote).
+   const a=await attestTarget(env,rpc,quoteMint,{program:config.program,now}),target=BigInt(a.target),q={...a.quote,mint:key(a.quote.mint),global:key(a.quote.global),tokenProgram:key(a.quote.tokenProgram)};
+   const qp={...p,minTarget:toQuoteUnits(p.minTarget,target),maxRaise:toQuoteUnits(p.maxRaise,target),creatorBuy:toQuoteUnits(p.creatorBuy,target)};if(qp.minTarget<qp.maxRaise/10n)qp.minTarget=qp.maxRaise/10n;
+   requireThat(qp.maxRaise+qp.creatorBuy>=q.minFirstBuy&&qp.maxRaise+qp.creatorBuy<=BigInt(a.maxFirstBuy)&&qp.maxRaise/100n>=q.minPledge,'RAISE',`Raise is outside this quote\u2019s limits.`);
+   const c=await createQuoteIxs(wallet,config.platform,config.treasury,q,qp,{target,expiry:a.expiry,attestor:config.attestor,signature:Buffer.from(a.signature,'base64')},config.program);ixs=c.instructions;
+   expected={window:c.addresses.window.toBase58(),mint:c.addresses.mint.toBase58(),creatorReserveLamports:'100000000',creationFeeLamports:'20000000',quoteMint,quoteDecimals:q.decimals,migrationTarget:a.target,maxRaise:String(qp.maxRaise),minTarget:String(qp.minTarget),creatorBuyQuote:String(qp.creatorBuy),solUsd:a.solUsd,quoteUsd:a.quoteUsd};
+  }
  }else{
   const w=await fetchWindow(rpc,b.window,config.program);expected={window:b.window,mint:w.mint.toBase58()};
+  if(!isSolWindow(w)){
+   const q=await windowQuote(rpc,w,config.program);expected.quoteMint=q.mint.toBase58();
+   if(b.action==='pledge'){const amount=integer(b.amount,'amount');requireThat(amount>=q.minPledge&&amount<=w.maxRaise/100n,'CAP','Pledge amount is outside this launch\u2019s limits.');const seconds=Math.floor(now/1000);requireThat(w.state===0&&BigInt(seconds)>=w.start&&BigInt(seconds)<w.end,'WINDOW_CLOSED','This fair window is not open.',409);
+    const evidence=await walletEvidence(rpc,wallet,seconds);checkEligibility(evidence,w);const cluster=await clusterFor(db,config.program,b.window,owner,evidence,now),expiry=seconds+120,signed=await signPledge(env,config.program,wallet,b.window,cluster,expiry);
+    ixs=await pledgeQuoteIxs(wallet,b.window,w,q,amount,Buffer.from(cluster,'hex'),expiry,config.attestor,Buffer.from(signed.signature,'base64'),config.program);}
+   else if(['creator-buy-refund','creator-fees'].includes(b.action)){requireThat(w.creator.toBase58()===wallet,'CREATOR','Only the creator can claim these funds.',403);ixs=await creatorQuoteIx(b.action,wallet,b.window,w,q,config.program);}
+   else if(['reserve','dev-buy'].includes(b.action)){requireThat(w.creator.toBase58()===wallet,'CREATOR','Only the creator can claim these funds.',403);ixs=[await creatorIx(b.action,wallet,b.window,w,config.program)].flat();}
+   else if(b.action==='claim')ixs=await claimQuoteIxs(wallet,b.window,w,q,config.program);
+   else if(b.action==='settle')ixs=[await settleQuoteIx(b.window,w,q,config.program)];
+   else if(b.action==='abort')ixs=[await instruction('abort_stalled',[meta(b.window,true)],undefined,config.program)];
+   else requireThat(false,'POOL','Trading token-quoted pools from Floof is not available yet; use Raydium.',409);
+  }else{
   if(b.action==='pledge'){
    const amount=integer(b.amount,'amount');requireThat(amount>=10000000n&&amount<=w.maxRaise/100n,'CAP','Pledge amount exceeds this launch’s cap.');const seconds=Math.floor(now/1000);requireThat(w.state===0&&BigInt(seconds)>=w.start&&BigInt(seconds)<w.end,'WINDOW_CLOSED','This fair window is not open.',409);
    const evidence=await walletEvidence(rpc,wallet,seconds);checkEligibility(evidence,w);const cluster=await clusterFor(db,config.program,b.window,owner,evidence,now),expiry=seconds+120,signed=await signPledge(env,config.program,wallet,b.window,cluster,expiry);
@@ -35,6 +60,7 @@ export async function prepareChain(env,db,owner,wallet,b,now=Date.now()){
   }else if(b.action==='claim')ixs=await claimIxs(wallet,b.window,w,config.program);
   else if(b.action==='settle')ixs=[await settleIx(b.window,w,config.program)];
   else ixs=[await instruction('abort_stalled',[meta(b.window,true)],undefined,config.program)];
+  }
  }
  const latest=(await rpc('getLatestBlockhash',[{commitment:'confirmed'}])).value;
  const tx=new Transaction({feePayer:key(wallet),...latest}).add(ComputeBudgetProgram.setComputeUnitLimit({units:1400000}),...ixs),encoded=tx.serialize({requireAllSignatures:false,verifySignatures:false}).toString('base64');

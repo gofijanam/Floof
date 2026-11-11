@@ -25,6 +25,8 @@ export default function CoinLive() {
   const st = settle(c, mine)
   const left = c.windowEnd - now
   const upcoming = c.status === 'upcoming'
+  // Token-quoted launches pledge in their quote; the wallet's token balance is checked by simulation before signing.
+  const Q = c.quote ?? 'SOL', tokenQuote = !!c.quoteMint
   const items = feed.filter((f) => f.coin === c.id).slice(0, 14)
   return (
     <div className="mx-auto max-w-[1400px] px-4 pt-24 md:px-6 md:pt-28">
@@ -58,12 +60,12 @@ export default function CoinLive() {
               <div className="text-right">
                 <div className="label">in the cloud</div>
                 <div className="font-num text-4xl font-semibold text-pink tnum md:text-5xl"><Num v={c.pledged} d={2} /></div>
-                <div className="text-sm font-bold text-lav tnum">of {cap.toFixed(0)} SOL max raise · {c.pledgers} floofs</div>
+                <div className="text-sm font-bold text-lav tnum">of {cap.toFixed(0)} {c.quote ?? 'SOL'} max raise · {c.pledgers} floofs</div>
               </div>
             </div>
             <div className="mx-auto mt-2 max-w-[760px]"><EscrowCloud coin={c} /></div>
             <div className="grid grid-cols-2 gap-3 border-t border-lav/10 pt-4 sm:grid-cols-4" data-cursor="native">
-              <Mini k="Price ceiling" v={fmtPrice(c.priceCeiling)} s="SOL / token" />
+              <Mini k="Price ceiling" v={fmtPrice(c.priceCeiling)} s={`${c.quote ?? 'SOL'} / token`} />
               <Mini k="If it closed now" v={st.failed ? 'refund' : fmtPrice(st.price)} s={st.failed ? 'below min target' : 'one price for all'} accent={st.failed ? 'text-peach' : 'text-blue'} />
               <Mini k="Oversubscription" v={`${st.oversub.toFixed(2)}×`} s={st.over ? `fill ${(st.fill * 100).toFixed(0)}% pro-rata` : 'everyone fills 100%'} accent={st.over ? 'text-pink' : 'text-mint'} />
               <Mini k="Snipers blocked" v={c.snipersBlocked.toLocaleString()} s="sybil + bundle checks" />
@@ -72,7 +74,7 @@ export default function CoinLive() {
 
           {/* mechanic strip */}
           <div className="grid gap-3 sm:grid-cols-3">
-            {[{ i: <IBolt s={18} />, t: 'One price, one block', d: `At zero every pledge buys at the same price ≤ ${fmtPrice(c.priceCeiling)}.` }, { i: <IShield s={18} />, t: `Min ${c.minTarget} SOL or refund`, d: 'Miss the min target and every lamport goes back automatically.' }, { i: <IGhost s={18} />, t: '1% wallet cap', d: `Max ${walletCap(c).toFixed(2)} SOL per wallet. Linked wallets are clustered & blocked.` }].map((x) => (
+            {[{ i: <IBolt s={18} />, t: 'One price, one block', d: `At zero every pledge buys at the same price ≤ ${fmtPrice(c.priceCeiling)}.` }, { i: <IShield s={18} />, t: `Min ${c.minTarget} ${c.quote ?? 'SOL'} or refund`, d: 'Miss the min target and every lamport goes back automatically.' }, { i: <IGhost s={18} />, t: '1% wallet cap', d: `Max ${walletCap(c).toFixed(2)} SOL per wallet. Linked wallets are clustered & blocked.` }].map((x) => (
               <Card key={x.t} className="p-4"><div className="flex items-center gap-2 font-extrabold"><span className="grid h-8 w-8 place-items-center rounded-xl bg-pink/15 text-pink">{x.i}</span>{x.t}</div><p className="mt-2 text-sm font-semibold text-lav">{x.d}</p></Card>
             ))}
           </div>
@@ -89,7 +91,7 @@ export default function CoinLive() {
                       <span className={f.wallet === 'you' ? 'text-pink' : ''}>{f.wallet === 'you' ? 'You' : f.wallet}</span>
                       {f.kind === 'blocked' && <span className="whitespace-nowrap rounded-full bg-danger/10 px-2 py-0.5 text-[10px] font-black text-danger"><span className="hidden sm:inline">sybil cluster · </span>bounced</span>}
                     </div>
-                    <div className="flex items-center gap-4"><span className={cx('font-num tnum', f.kind === 'blocked' ? 'text-lav/50 line-through' : 'text-cream')}>{f.amount.toFixed(3)} SOL</span><span className="w-10 text-right text-xs text-lav/60 tnum">{ago(now - f.t)}</span></div>
+                    <div className="flex items-center gap-4"><span className={cx('font-num tnum', f.kind === 'blocked' ? 'text-lav/50 line-through' : 'text-cream')}>{f.amount.toFixed(3)} {c.quote ?? 'SOL'}</span><span className="w-10 text-right text-xs text-lav/60 tnum">{ago(now - f.t)}</span></div>
                   </motion.div>
                 ))}
               </AnimatePresence>
@@ -130,25 +132,27 @@ function PledgeForm({ coinId }: { coinId: string }) {
   const room = Math.max(0, cap - mine)
   const v = parseFloat(amt)
   const upcoming = c.status === 'upcoming'
+  // Token-quoted launches pledge in their quote; the wallet's token balance is checked by simulation before signing.
+  const Q = c.quote ?? 'SOL', tokenQuote = !!c.quoteMint
   const err = useMemo(() => {
     if (!amt) return ''
     if (isNaN(v) || v <= 0) return 'Enter an amount'
-    if (v < 0.01) return 'Minimum pledge is 0.01 SOL'
-    if (v > room + 1e-9) return `Over the 1% wallet cap — you can add ${room.toFixed(3)} SOL`
-    if (v > bal) return 'Not enough SOL in wallet'
+    if (!tokenQuote && v < 0.01) return 'Minimum pledge is 0.01 SOL'
+    if (v > room + 1e-9) return `Over the 1% wallet cap — you can add ${room.toFixed(3)} ${Q}`
+    if (!tokenQuote && v > bal) return 'Not enough SOL in wallet'
     return ''
   }, [amt, v, room, bal])
   const proj = settle({ ...c, pledged: c.pledged + (v || 0) }, mine + (v || 0))
   const valid = !!amt && !err
   return (
     <Card neon="p" className="p-5" data-cursor="native">
-      <div className="flex items-center justify-between"><div className="font-display text-2xl font-extrabold">Pledge SOL</div><span className="chip text-lav tnum">bal {bal.toFixed(2)}</span></div>
+      <div className="flex items-center justify-between"><div className="font-display text-2xl font-extrabold">Pledge {Q}</div><span className="chip text-lav tnum">{tokenQuote ? `pay in ${Q}` : `bal ${bal.toFixed(2)}`}</span></div>
       {mine > 0 && <div className="mt-3 flex items-center justify-between rounded-2xl bg-pink/10 px-3 py-2 text-sm font-extrabold text-pink ring-1 ring-pink/25"><span>Your pledge</span><span className="font-num tnum">{mine.toFixed(3)} SOL</span></div>}
       <div className="mt-4">
         <div className="flex items-center justify-between text-xs font-extrabold text-lav"><span>Amount</span><span className="tnum">cap {cap.toFixed(2)} · room {room.toFixed(3)}</span></div>
         <div className={cx('mt-1.5 flex items-center rounded-2xl border bg-night/70 pr-3 transition', err ? 'border-danger/60' : 'border-lav/20 focus-within:border-pink/70')}>
           <input inputMode="decimal" value={amt} onChange={(e) => setAmt(e.target.value.replace(/[^0-9.]/g, ''))} placeholder="0.00" disabled={upcoming} className="w-full bg-transparent px-4 py-3.5 font-num text-2xl font-semibold outline-none tnum placeholder:text-lav/30" aria-label="Pledge amount in SOL" aria-invalid={!!err} />
-          <span className="font-extrabold text-lav">SOL</span>
+          <span className="font-extrabold text-lav">{Q}</span>
         </div>
         <div className="mt-2 grid grid-cols-4 gap-1.5">
           {[0.1, 0.25, 0.5].map((p) => <button key={p} disabled={upcoming} onClick={() => setAmt(String(Math.min(p, room)))} className="rounded-xl bg-lav/10 py-2 text-xs font-extrabold hover:bg-lav/20 disabled:opacity-40">{p}</button>)}
@@ -159,7 +163,7 @@ function PledgeForm({ coinId }: { coinId: string }) {
       <div className="mt-4 space-y-1.5 rounded-2xl bg-night/50 p-3 text-xs font-bold ring-1 ring-lav/10">
         <Row k="Est. fill at zero" v={proj.failed ? '— (below min)' : `${(proj.fill * 100).toFixed(0)}%`} />
         <Row k="Est. tokens" v={proj.myTokens ? Math.round(proj.myTokens).toLocaleString() : '—'} />
-        <Row k="Est. refund" v={`${proj.myRefund.toFixed(3)} SOL`} />
+        <Row k="Est. refund" v={`${proj.myRefund.toFixed(3)} ${Q}`} />
         <Row k="Price" v={`one price ≤ ${fmtPrice(c.priceCeiling)}`} />
       </div>
       <div className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-[11px] font-extrabold text-mint">
@@ -170,13 +174,13 @@ function PledgeForm({ coinId }: { coinId: string }) {
       ) : !wallet ? (
         <Magnetic className="mt-4 w-full" strength={0.15}><button onClick={connectWallet} className="btn-candy w-full py-3.5">{devnet?'Connect wallet to pledge':'Open sandbox to pledge'}</button></Magnetic>
       ) : (
-        <button disabled={!valid} onClick={() => setOpen(true)} className="btn-candy mt-4 w-full py-3.5 text-base disabled:cursor-not-allowed disabled:opacity-40">Pledge {valid ? `${v} SOL` : ''}</button>
+        <button disabled={!valid} onClick={() => setOpen(true)} className="btn-candy mt-4 w-full py-3.5 text-base disabled:cursor-not-allowed disabled:opacity-40">Pledge {valid ? `${v} ${Q}` : ''}</button>
       )}
       <p className="mt-2 text-center text-[11px] font-bold text-lav/60">Pledges sit in escrow until zero. {devnet?'Solana Devnet — test SOL only.':'Sandbox ledger — test balances only.'}</p>
       <TxModal open={open} onClose={() => { setOpen(false) }} title={`Pledge to $${c.ticker}`} confirmLabel="Confirm pledge"
-        rows={[{ k: 'Amount', v: `${v || 0} SOL`, strong: true }, { k: 'Est. fill', v: proj.failed ? 'below min' : `${(proj.fill * 100).toFixed(0)}%` }, { k: 'Est. tokens', v: proj.myTokens ? Math.round(proj.myTokens).toLocaleString() : '—' }, { k: 'Escrow program', v: 'FLooF…escr (devnet)' }, { k: 'Network fee', v: '~0.000005 SOL' }]}
-        note="Your SOL is held by the escrow program. At zero you either buy at the one clearing price (pro-rata if oversubscribed) or get refunded."
-        onConfirm={async () => { const result = await pledge(c.id, v); setAmt(''); toast({ kind: 'pledge', title: `You pledged ${v} SOL`, body: `into the $${c.ticker} cloud ☁️`, coin: c.id }); return result }} />
+        rows={[{ k: 'Amount', v: `${v || 0} ${Q}`, strong: true }, { k: 'Est. fill', v: proj.failed ? 'below min' : `${(proj.fill * 100).toFixed(0)}%` }, { k: 'Est. tokens', v: proj.myTokens ? Math.round(proj.myTokens).toLocaleString() : '—' }, { k: 'Escrow program', v: 'FLooF…escr (devnet)' }, { k: 'Network fee', v: '~0.000005 SOL' }]}
+        note={`Your ${Q} is held by the escrow program. At zero you either buy at the one clearing price (pro-rata if oversubscribed) or get refunded.`}
+        onConfirm={async () => { const result = await pledge(c.id, v); setAmt(''); toast({ kind: 'pledge', title: `You pledged ${v} ${Q}`, body: `into the $${c.ticker} cloud ☁️`, coin: c.id }); return result }} />
     </Card>
   )
 }

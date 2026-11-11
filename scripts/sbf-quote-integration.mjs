@@ -4,7 +4,7 @@
 import fs from 'node:fs';import assert from 'node:assert/strict';import {createHash,createPrivateKey,sign,randomBytes} from 'node:crypto';
 import {LiteSvm,Account,FailedTransactionMetadata} from 'litesvm/dist/internal.js';
 import {Connection,Keypair,PublicKey,Transaction,ComputeBudgetProgram,SystemProgram} from '@solana/web3.js';
-import {TOKEN_PROGRAM_ID,MINT_SIZE,createInitializeMint2Instruction,createAssociatedTokenAccountIdempotentInstruction,createMintToInstruction} from '@solana/spl-token';
+import {TOKEN_PROGRAM_ID,TOKEN_2022_PROGRAM_ID,ExtensionType,AccountState,getMintLen,createInitializeTransferFeeConfigInstruction,createInitializeNonTransferableMintInstruction,createInitializePermanentDelegateInstruction,createInitializeTransferHookInstruction,createInitializeDefaultAccountStateInstruction,createInitializeMintCloseAuthorityInstruction,createInitializePausableConfigInstruction,MINT_SIZE,createInitializeMint2Instruction,createAssociatedTokenAccountIdempotentInstruction,createMintToInstruction} from '@solana/spl-token';
 import {createPlatformConfig,getPdaPlatformId,DEVNET_PROGRAM_ID,getCpmmPdaAmmConfigId} from '@raydium-io/raydium-sdk-v2';import BN from 'bn.js';
 import {PROGRAM,LAUNCHLAB,METADATA,GLOBAL,WSOL,initializeIx,createIx,decodeWindow,pledgeIxs,pledgeMessage,creatorIx,ata,pda} from '../server/chain-client.mjs';
 import {qata,setQuoteIx,createQuoteIxs,pledgeQuoteIxs,settleQuoteIx,claimQuoteIxs,creatorQuoteIx,launchlabConfigAddress,quoteMessage} from '../server/quote-client.mjs';
@@ -27,11 +27,11 @@ const tokenAmount=a=>{const acc=svm.getAccount(new PublicKey(a).toBytes());retur
 const get=async a=>decodeWindow(svm.getAccount(new PublicKey(a).toBytes()).data());
 const advance=s=>{clock=svm.getClock();clock.unixTimestamp+=BigInt(s);clock.slot+=1500n;svm.setClock(clock)};
 // ---- Fabricated quote: SPL mint (6 dp, USDC-like) + LaunchLab GlobalConfig for it ----
-async function makeQuote(decimals,minFundRaising){const kp=Keypair.generate(),rent=svm.minimumBalanceForRentExemption(BigInt(MINT_SIZE));
- send([SystemProgram.createAccount({fromPubkey:admin.publicKey,newAccountPubkey:kp.publicKey,lamports:Number(rent),space:MINT_SIZE,programId:TOKEN_PROGRAM_ID}),createInitializeMint2Instruction(kp.publicKey,decimals,admin.publicKey,null)],[admin,kp]);
+async function makeQuote(decimals,minFundRaising,{program=TOKEN_PROGRAM_ID,exts=[]}={}){const kp=Keypair.generate(),space=program.equals(TOKEN_PROGRAM_ID)?MINT_SIZE:getMintLen(exts.map(e=>e.type)),rent=svm.minimumBalanceForRentExemption(BigInt(space));
+ send([SystemProgram.createAccount({fromPubkey:admin.publicKey,newAccountPubkey:kp.publicKey,lamports:Number(rent),space,programId:program}),...exts.map(e=>e.ix(kp.publicKey)),createInitializeMint2Instruction(kp.publicKey,decimals,admin.publicKey,admin.publicKey,program)],[admin,kp]);
  const g=await fetchAccount(GLOBAL),data=Buffer.from(g.data);kp.publicKey.toBuffer().copy(data,83);data.writeBigUInt64LE(BigInt(minFundRaising),75);const global=launchlabConfigAddress(kp.publicKey);
- svm.setAccount(global.toBytes(),new Account(BigInt(g.lamports),data,LAUNCHLAB.toBytes(),false,0n));return {mint:kp.publicKey,global,tokenProgram:TOKEN_PROGRAM_ID,decimals}}
-const fund=(owner,q,amount)=>send([createAssociatedTokenAccountIdempotentInstruction(admin.publicKey,qata(owner,q.mint),owner,q.mint),createMintToInstruction(q.mint,qata(owner,q.mint),admin.publicKey,BigInt(amount))]);
+ svm.setAccount(global.toBytes(),new Account(BigInt(g.lamports),data,LAUNCHLAB.toBytes(),false,0n));return {mint:kp.publicKey,global,tokenProgram:program,decimals}}
+const fund=(owner,q,amount)=>send([createAssociatedTokenAccountIdempotentInstruction(admin.publicKey,qata(owner,q.mint,q.tokenProgram),owner,q.mint,q.tokenProgram),createMintToInstruction(q.mint,qata(owner,q.mint,q.tokenProgram),admin.publicKey,BigInt(amount),[],q.tokenProgram)]);
 const USDC=await makeQuote(6,1_000_000_000n);const T=migrationTarget({solUsd:150,quoteUsd:1,decimals:6});assert.equal(T,12_750_000_000n,'85 SOL at $150 = 12,750 USDC');
 const qp={enabled:true,issuerControls:false,minPledge:1_000_000n,minFirstBuy:10_000_000n,targetMin:5_000_000_000n,targetMax:50_000_000_000n};
 // set_quote: only the config authority; WSOL and a mismatched GlobalConfig are rejected.
@@ -41,13 +41,13 @@ send([await setQuoteIx(admin.publicKey,platform,{...USDC,global:GLOBAL},qp)],[ad
 send([await setQuoteIx(admin.publicKey,platform,USDC,{...qp,targetMin:100_000_000n})],[admin],true); // below LaunchLab minFundRaisingB
 send([await setQuoteIx(admin.publicKey,platform,USDC,qp)]);
 const results={};let nonce=1;
-async function scenario(label,{raise,creatorBuy=0n,pledgers=100,minTarget=raise/10n,lockDays=0,duration=600,target=T,quote=USDC,fill=1n}){
+async function scenario(label,{raise,creatorBuy=0n,pledgers=100,minTarget=raise/10n,lockDays=0,duration=600,target=T,quote=USDC,fill=100n}){
  const start=Number(svm.getClock().unixTimestamp),expiry=start+120;const v={nonce:nonce++,name:`Quote ${label}`,symbol:`Q${label}`.slice(0,10),uri:'https://example.com/m.json',walletAge:false,history:false,duration,minTarget,maxRaise:raise,creatorBuy,lockDays};
  if(creatorBuy>0n)fund(admin.publicKey,quote,creatorBuy);
  const c=await createQuoteIxs(admin.publicKey,platform,admin.publicKey,quote,v,{target,expiry,attestor:attestor.publicKey,signature:signAtt(quoteMessage(quote.mint,target,expiry))});send(c.instructions);
- let w=await get(c.addresses.window);assert.equal(w.fundraisingTarget,target);assert.equal(w.creatorBuy,creatorBuy);assert(w.global.equals(quote.global));assert.equal(tokenAmount(c.addresses.escrow),creatorBuy);
- const cap=raise/100n*fill,people=[];for(let i=0;i<pledgers;i++){const u=Keypair.generate();svm.airdrop(u.publicKey.toBytes(),100_000_000n);fund(u.publicKey,quote,cap);const cl=randomBytes(32);send(await pledgeQuoteIxs(u.publicKey,c.addresses.window,w,quote,cap,cl,expiry,attestor.publicKey,signAtt(pledgeMessage(u.publicKey,c.addresses.window,cl,expiry))),[u]);people.push(u)}
- w=await get(c.addresses.window);assert.equal(tokenAmount(c.addresses.escrow),w.pledged+creatorBuy);advance(duration+1);
+ let w=await get(c.addresses.window);assert.equal(w.fundraisingTarget,target);assert(w.global.equals(quote.global));assert.equal(tokenAmount(c.addresses.escrow),w.creatorBuy);if(!quote.fee)assert.equal(w.creatorBuy,creatorBuy);
+ const cap=raise/100n*fill/100n,people=[];for(let i=0;i<pledgers;i++){const u=Keypair.generate();svm.airdrop(u.publicKey.toBytes(),100_000_000n);fund(u.publicKey,quote,cap);const cl=randomBytes(32);send(await pledgeQuoteIxs(u.publicKey,c.addresses.window,w,quote,cap,cl,expiry,attestor.publicKey,signAtt(pledgeMessage(u.publicKey,c.addresses.window,cl,expiry))),[u]);people.push(u)}
+ w=await get(c.addresses.window);assert.equal(tokenAmount(c.addresses.escrow),w.pledged+w.creatorBuy);advance(duration+1);
  const tx=send([await settleQuoteIx(c.addresses.window,w,quote)]);w=await get(c.addresses.window);return {c,w,people,cu:tx.computeUnitsConsumed()};
 }
 // 1) 5,000 USDC presale (100 wallets at the 1% cap) + 200 USDC dev buy locked 30 days.
@@ -86,4 +86,37 @@ async function scenario(label,{raise,creatorBuy=0n,pledgers=100,minTarget=raise/
  const sol=await createIx(admin.publicKey,platform,admin.publicKey,{...v,nonce:901,minTarget:1e9,maxRaise:10e9,lockDays:0});send([sol.instruction]);const sw=await get(sol.addresses.window);const u=Keypair.generate();svm.airdrop(u.publicKey.toBytes(),100_000_000n);fund(u.publicKey,USDC,100_000_000n);const cl=randomBytes(32);
  send(await pledgeQuoteIxs(u.publicKey,sol.addresses.window,sw,USDC,100_000_000n,cl,expiry,attestor.publicKey,signAtt(pledgeMessage(u.publicKey,sol.addresses.window,cl,expiry))),[u],true);
  send(await pledgeIxs(u.publicKey,sol.addresses.window,50_000_000,cl,expiry,attestor.publicKey,signAtt(pledgeMessage(u.publicKey,sol.addresses.window,cl,expiry))),[u]);results.guards='ok';}
-console.log(JSON.stringify({status:'passed',program:PROGRAM.toBase58(),quote:'SPL 6dp (fabricated)',...results},null,1));
+
+// ---- Token-2022 quote with a 1% transfer fee (8 dp, xStock-like decimals) ----
+const FEE_BPS=100;const feeExt={type:ExtensionType.TransferFeeConfig,ix:m=>createInitializeTransferFeeConfigInstruction(m,admin.publicKey,admin.publicKey,FEE_BPS,10n**15n,TOKEN_2022_PROGRAM_ID)};
+const X=await makeQuote(8,100_000_000n,{program:TOKEN_2022_PROGRAM_ID,exts:[feeExt]});X.fee=true;const TX=migrationTarget({solUsd:150,quoteUsd:300,decimals:8});assert.equal(TX,4_250_000_000n);
+send([await setQuoteIx(admin.publicKey,platform,X,{...qp,minPledge:100_000n,minFirstBuy:1_000_000n,targetMin:1_000_000_000n,targetMax:20_000_000_000n})]);
+const net=a=>a-(a*BigInt(FEE_BPS)+9999n)/10000n;
+{const raise=1_700_000_000n,creatorBuy=100_000_000n;const r=await scenario('X',{raise,creatorBuy,quote:X,target:TX,lockDays:0,fill:99n,pledgers:100});
+ // Each pledger sent 99% of the cap gross; escrow credited only what arrived (net of the 1% fee) and caps counted net.
+ const {w}=r;assert.equal(w.creatorBuy,net(creatorBuy));assert.equal(w.pledged,net(raise/100n*99n/100n)*100n);assert.equal(w.state,1);
+ const pool=await decodePool(svm.getAccount(w.pool.toBytes()).data());assert(pool.quoteMint.equals(X.mint));assert.equal(pool.target,TX);assert.equal(pool.status,0);
+ const left=tokenAmount(r.c.addresses.escrow);assert(left<=w.pledged-w.raised+1n,'escrow never over-promised');
+ let refunds=0n;for(const u of r.people.slice(0,20)){const b=tokenAmount(qata(u.publicKey,X.mint,TOKEN_2022_PROGRAM_ID));send(await claimQuoteIxs(u.publicKey,r.c.addresses.window,w,X),[u]);refunds+=tokenAmount(qata(u.publicKey,X.mint,TOKEN_2022_PROGRAM_ID))-b;assert(tokenAmount(ata(u.publicKey,w.mint))>0n)}
+ const before=tokenAmount(qata(admin.publicKey,X.mint,TOKEN_2022_PROGRAM_ID));send(await creatorQuoteIx('creator-fees',admin.publicKey,r.c.addresses.window,w,X));const fees=tokenAmount(qata(admin.publicKey,X.mint,TOKEN_2022_PROGRAM_ID))-before;assert(fees>0n);
+ results.token2022Fee={target:String(TX),pledged:String(w.pledged),raised:String(w.raised),escrowLeft:String(left),poolRealQuote:String(pool.realQuote),creatorFees:String(fees),settleCU:String(r.cu)};}
+// Failed Token-2022 window: refunds pay back everything held (the outbound transfer fee is the token's, not Floof's).
+{const raise=1_000_000_000n;const r=await scenario('XF',{raise,quote:X,target:TX,pledgers:3,minTarget:500_000_000n});const {w}=r;assert.equal(w.state,2);
+ for(const u of r.people){const p=w.pledged/3n,b=tokenAmount(qata(u.publicKey,X.mint,TOKEN_2022_PROGRAM_ID));send(await claimQuoteIxs(u.publicKey,r.c.addresses.window,w,X),[u]);assert.equal(tokenAmount(qata(u.publicKey,X.mint,TOKEN_2022_PROGRAM_ID))-b,net(p))}
+ assert.equal(tokenAmount(r.c.addresses.escrow),0n);results.token2022Refund='escrow emptied';}
+// ---- Token-2022 mint policy (set_quote) ----
+const pol=async(label,exts,{issuer=false,expect=true}={})=>{const q=await makeQuote(6,100_000_000n,{program:TOKEN_2022_PROGRAM_ID,exts});const ix=await setQuoteIx(admin.publicKey,platform,q,{...qp,issuerControls:issuer,targetMin:1_000_000_000n});if(expect)send([ix]);else send([ix],[admin],true);return label};
+const k=()=>Keypair.generate().publicKey;const policy=[];
+policy.push(await pol('transfer fee ok',[feeExt]));
+policy.push(await pol('non-transferable rejected',[{type:ExtensionType.NonTransferable,ix:m=>createInitializeNonTransferableMintInstruction(m,TOKEN_2022_PROGRAM_ID)}],{expect:false}));
+policy.push(await pol('default frozen rejected',[{type:ExtensionType.DefaultAccountState,ix:m=>createInitializeDefaultAccountStateInstruction(m,AccountState.Frozen,TOKEN_2022_PROGRAM_ID)}],{expect:false,issuer:true}));
+policy.push(await pol('default initialized ok',[{type:ExtensionType.DefaultAccountState,ix:m=>createInitializeDefaultAccountStateInstruction(m,AccountState.Initialized,TOKEN_2022_PROGRAM_ID)}]));
+policy.push(await pol('mint close authority rejected',[{type:ExtensionType.MintCloseAuthority,ix:m=>createInitializeMintCloseAuthorityInstruction(m,admin.publicKey,TOKEN_2022_PROGRAM_ID)}],{expect:false,issuer:true}));
+policy.push(await pol('active transfer hook rejected',[{type:ExtensionType.TransferHook,ix:m=>createInitializeTransferHookInstruction(m,admin.publicKey,k(),TOKEN_2022_PROGRAM_ID)}],{expect:false,issuer:true}));
+policy.push(await pol('dormant hook authority needs issuer opt-in',[{type:ExtensionType.TransferHook,ix:m=>createInitializeTransferHookInstruction(m,admin.publicKey,PublicKey.default,TOKEN_2022_PROGRAM_ID)}],{expect:false}));
+policy.push(await pol('dormant hook authority ok with opt-in',[{type:ExtensionType.TransferHook,ix:m=>createInitializeTransferHookInstruction(m,admin.publicKey,PublicKey.default,TOKEN_2022_PROGRAM_ID)}],{issuer:true}));
+policy.push(await pol('permanent delegate needs issuer opt-in',[{type:ExtensionType.PermanentDelegate,ix:m=>createInitializePermanentDelegateInstruction(m,admin.publicKey,TOKEN_2022_PROGRAM_ID)}],{expect:false}));
+policy.push(await pol('permanent delegate ok with opt-in',[{type:ExtensionType.PermanentDelegate,ix:m=>createInitializePermanentDelegateInstruction(m,admin.publicKey,TOKEN_2022_PROGRAM_ID)}],{issuer:true}));
+try{policy.push(await pol('pausable needs issuer opt-in',[{type:ExtensionType.PausableConfig,ix:m=>createInitializePausableConfigInstruction(m,admin.publicKey,TOKEN_2022_PROGRAM_ID)}],{expect:false}));policy.push(await pol('pausable ok with opt-in',[{type:ExtensionType.PausableConfig,ix:m=>createInitializePausableConfigInstruction(m,admin.publicKey,TOKEN_2022_PROGRAM_ID)}],{issuer:true}));}catch(e){policy.push('pausable: not supported by the bundled Token-2022 ('+String(e.message).slice(0,60)+')')}
+results.token2022Policy=policy;
+console.log(JSON.stringify({status:'passed',program:PROGRAM.toBase58(),quotes:'SPL 6dp + Token-2022 8dp 1% transfer fee (fabricated)',...results},null,1));

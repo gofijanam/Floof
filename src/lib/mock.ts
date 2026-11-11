@@ -21,7 +21,7 @@ export interface Coin {
   windowTokens: number // tokens sold in window
   minTarget: number // SOL
   pledged: number; pledgers: number
-  lockDays: number; quote?: string; devLocked?: boolean
+  lockDays: number; quote?: string; quoteMint?: string; quoteDecimals?: number; devLocked?: boolean
   /** Create-page preview: show the window length instead of a countdown; hide the lock until it is chosen. */
   draft?: boolean; lockUnset?: boolean
   // post-window

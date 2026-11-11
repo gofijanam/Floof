@@ -1,0 +1,35 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {Buffer} from 'node:buffer';
+import {generateKeyPairSync,verify,createPublicKey} from 'node:crypto';
+import {Keypair,PublicKey} from '@solana/web3.js';
+import {listQuotes,attestTarget,decodeQuoteConfig,toQuoteUnits,_resetPriceCache} from '../server/quotes.mjs';
+import {quoteMessage} from '../server/quote-client.mjs';
+import {discriminator,GLOBAL,PROGRAM} from '../server/chain-client.mjs';
+import {decodeEvents} from '../server/chain-indexer.mjs';
+import {parseQuotesResponse} from '../src/lib/quotes.ts';
+const WSOL='So11111111111111111111111111111111111111112',T22='TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb',SPL='TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA';
+const mint=Keypair.generate().publicKey,global=Keypair.generate().publicKey;
+async function quoteConfig({tokenProgram=SPL,decimals=6,enabled=true,targetMin=5_000_000_000n,targetMax=50_000_000_000n}={}){const b=Buffer.alloc(140);(await discriminator('account:QuoteConfig')).copy(b,0);mint.toBuffer().copy(b,8);b.set(new PublicKey(tokenProgram).toBytes(),40);global.toBuffer().copy(b,72);b[104]=decimals;b[105]=+enabled;b[106]=0;b.writeBigUInt64LE(1_000_000n,107);b.writeBigUInt64LE(10_000_000n,115);b.writeBigUInt64LE(targetMin,123);b.writeBigUInt64LE(targetMax,131);b[139]=255;return b}
+const globalData=minRaise=>{const b=Buffer.alloc(371);b.writeBigUInt64LE(minRaise,75);return b};
+function fakeRpc(configs,minRaise=1_000_000_000n){return async(method,params)=>{if(method==='getProgramAccounts')return configs.map(d=>({pubkey:'x',account:{data:[d.toString('base64'),'base64']}}));if(method==='getAccountInfo')return {value:{data:[globalData(params[0]===GLOBAL.toBase58()?1n:minRaise).toString('base64'),'base64']}};throw Error(method)}}
+const prices=p=>async url=>({ok:true,json:async()=>Object.fromEntries(new URL(url).searchParams.get('ids').split(',').filter(m=>p[m]!=null).map(m=>[m,{usdPrice:p[m]}]))});
+test('GET /api/quotes matches the Studio QuotesResponse contract',async()=>{_resetPriceCache();
+ const r=await listQuotes({},fakeRpc([await quoteConfig({tokenProgram:T22,decimals:8})]),{fetcher:prices({[WSOL]:150,[mint.toBase58()]:300})});
+ assert.deepEqual(parseQuotesResponse(JSON.parse(JSON.stringify(r))),JSON.parse(JSON.stringify(r)),'parser keeps every row');
+ const sol=r.quotes[0];assert.deepEqual(Object.keys(sol).sort(),['configId','decimals','group','logo','minMigration','mint','name','priceUsd','symbol','token2022']);assert.equal(sol.configId,GLOBAL.toBase58());assert.equal(sol.minMigration,'1');assert.equal(sol.priceUsd,150);
+ const reg=r.quotes.find(q=>q.mint===mint.toBase58());assert.equal(reg.configId,global.toBase58());assert.equal(reg.token2022,true);assert.equal(reg.decimals,8);assert.equal(reg.minMigration,'1000000000');assert.equal(reg.priceUsd,300);
+ assert.equal(r.quotes.filter(q=>q.configId).length,2,'only SOL + the on-chain allowlist are launchable');assert(r.quotes.length>100);assert(!Number.isNaN(Date.parse(r.observedAt)));
+ assert.equal(new Set(r.quotes.map(q=>q.mint)).size,r.quotes.length,'one row per mint');});
+test('sandbox lists SOL as the only launchable quote and disabled quotes are hidden',async()=>{_resetPriceCache();const r=await listQuotes({},null,{fetcher:prices({})});assert.equal(r.quotes.filter(q=>q.configId).length,1);assert.equal(r.quotes[0].priceUsd,null);
+ _resetPriceCache();const d=await listQuotes({},fakeRpc([await quoteConfig({enabled:false})]),{fetcher:prices({})});assert.equal(d.quotes.find(q=>q.mint===mint.toBase58())?.configId??null,null);});
+test('price attestation signs the USD value of 85 SOL in the quote',async()=>{_resetPriceCache();const {privateKey,publicKey}=generateKeyPairSync('ed25519'),env={ATTESTOR_PKCS8_BASE64:privateKey.export({type:'pkcs8',format:'der'}).toString('base64')};
+ const a=await attestTarget(env,fakeRpc([await quoteConfig()]),mint.toBase58(),{fetcher:prices({[WSOL]:150,[mint.toBase58()]:1}),now:1794000000000});
+ assert.equal(a.target,'12750000000');assert.equal(a.maxFirstBuy,'12900000000');assert.equal(a.expiry,1794000120);
+ assert(verify(null,quoteMessage(mint,12_750_000_000n,1794000120,PROGRAM),publicKey,Buffer.from(a.signature,'base64')));
+ _resetPriceCache();await assert.rejects(attestTarget(env,fakeRpc([await quoteConfig({targetMax:10_000_000_000n})]),mint.toBase58(),{fetcher:prices({[WSOL]:150,[mint.toBase58()]:1})}),/band/);
+ _resetPriceCache();await assert.rejects(attestTarget(env,fakeRpc([await quoteConfig()]),mint.toBase58(),{fetcher:prices({[WSOL]:150})}),/price/);
+ _resetPriceCache();const floor=await attestTarget(env,fakeRpc([await quoteConfig()],20_000_000_000n),mint.toBase58(),{fetcher:prices({[WSOL]:150,[mint.toBase58()]:1})});assert.equal(floor.target,'20000000000','minMigration floor wins when larger');
+ assert.equal(toQuoteUnits(20_000_000_000n,12_750_000_000n),3_000_000_000n);});
+test('indexer decodes QuoteWindowCreated events',async()=>{const d=Buffer.concat([Buffer.from(await discriminator('event:QuoteWindowCreated')),Keypair.generate().publicKey.toBuffer(),mint.toBuffer(),Buffer.from(new BigUint64Array([12_750_000_000n]).buffer),Buffer.from(new BigUint64Array([5n]).buffer)]);
+ const p=PROGRAM.toBase58(),tx={slot:1,meta:{err:null,logMessages:[`Program ${p} invoke [1]`,'Program data: '+d.toString('base64'),`Program ${p} success`]},transaction:{message:{accountKeys:[p],instructions:[{programIdIndex:0}]}}};
+ const [e]=await decodeEvents(tx,p);assert.equal(e.kind,'QuoteWindowCreated');assert.equal(e.quoteMint,mint.toBase58());assert.equal(e.target,'12750000000');assert.equal(e.creatorBuy,'5');});
+test('QuoteConfig decoder rejects foreign accounts',async()=>{await assert.rejects(decodeQuoteConfig(Buffer.alloc(140)));});

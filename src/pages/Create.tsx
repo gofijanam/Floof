@@ -4,6 +4,9 @@ import { Link, useNavigate } from 'react-router-dom'
 import { CoinAvatar } from '../components/CoinAvatar'
 import { CoinCard } from '../components/CoinCard'
 import { TxModal } from '../components/TxModal'
+import { PairPicker } from '../components/PairPicker'
+import { useQuotes } from '../lib/useQuotes'
+import { quoteNumbers, solUsdFrom, fmtQuoteAmount, WSOL_MINT } from '../lib/quotes'
 import { Card, cx } from '../components/ui'
 import { PeekMochi } from '../components/ui'
 import { confetti } from '../components/confetti'
@@ -12,7 +15,7 @@ import { addCoin, connectWallet, getState, toast, useStore } from '../lib/store'
 import { Accessory, Coin, FEES, SUPPLY } from '../lib/mock'
 import { fmtPrice } from '../lib/format'
 import { api, uploadImage } from '../lib/api'
-import { firstBuyQuote, MAX_FIRST_BUY, MIN_FIRST_BUY, SELL, MIN_WINDOW_SECS, MAX_WINDOW_SECS, DEFAULT_WINDOW_SECS, MAX_LOCK_DAYS, QUOTES } from '../../server/launchlab-curve.mjs'
+import { firstBuyQuote, MAX_FIRST_BUY, MIN_FIRST_BUY, SELL, MIN_WINDOW_SECS, MAX_WINDOW_SECS, DEFAULT_WINDOW_SECS, MAX_LOCK_DAYS } from '../../server/launchlab-curve.mjs'
 
 const MAX_BUY_SOL = Number(MAX_FIRST_BUY) / 1e9, MIN_BUY_SOL = Number(MIN_FIRST_BUY) / 1e9
 const toLamports = (sol: number) => BigInt(Math.round((Number.isFinite(sol) && sol > 0 ? sol : 0) * 1e9))
@@ -25,9 +28,9 @@ const fmtSol = (n: number) => (Math.round(n * 100) / 100).toString()
 interface Form {
   name: string; ticker: string; desc: string; image: string | null; hue: number; acc: Accessory; x: string; tg: string; web: string
   durationMin: number; maxRaise: string; creatorBuy: string; minTarget: string; walletAge: boolean; balHistory: boolean
-  lockDays: number; quote: string
+  lockDays: number; quote: string; quoteMint: string
 }
-const init: Form = { name: '', ticker: '', desc: '', image: null, hue: 200, acc: 'none', x: '', tg: '', web: '', durationMin: DEFAULT_WINDOW_SECS / 60, maxRaise: '40', creatorBuy: '0', minTarget: '20', walletAge: true, balHistory: false, lockDays: 30, quote: 'SOL' }
+const init: Form = { name: '', ticker: '', desc: '', image: null, hue: 200, acc: 'none', x: '', tg: '', web: '', durationMin: DEFAULT_WINDOW_SECS / 60, maxRaise: '40', creatorBuy: '0', minTarget: '20', walletAge: true, balHistory: false, lockDays: 30, quote: 'SOL', quoteMint: WSOL_MINT }
 
 export default function Create() {
   const [f, setF] = useState<Form>(init)
@@ -70,6 +73,13 @@ export default function Create() {
   // Live numbers from the standard Raydium LaunchLab curve (same integer math and constants as the program).
   const maxRaise = parseFloat(f.maxRaise) || 0
   const creatorBuy = parseFloat(f.creatorBuy) || 0
+  // Launchable = registered in Floof's on-chain quote allowlist on this deployment (GET /api/quotes sets configId only for those).
+  const { data: quoteList } = useQuotes()
+  const quoteLive = (mint: string) => mint === WSOL_MINT || !!quoteList?.quotes.find((q) => q.mint === mint)?.configId
+  const quoteTok = quoteList?.quotes.find((q) => q.mint === f.quoteMint) ?? null
+  const isSolQuote = f.quoteMint === WSOL_MINT
+  const qn = useMemo(() => (!isSolQuote && quoteTok ? quoteNumbers(quoteTok, solUsdFrom(quoteList?.quotes ?? []), maxRaise, creatorBuy) : null), [isSolQuote, quoteTok, quoteList, maxRaise, creatorBuy])
+  const Q = f.quote, qAmt = (sol: number) => (qn ? fmtQuoteAmount(sol * qn.target.ui / 85, quoteTok?.decimals) : fmtSol(sol))
   const curve = useMemo(() => { try { return firstBuyQuote({ raise: toLamports(maxRaise), creatorBuy: toLamports(creatorBuy) }) } catch { return null } }, [maxRaise, creatorBuy])
   const windowTokens = curve ? Number(curve.windowTokens) / 1e6 : 0
   const ceiling = curve ? curve.avgPrice : 0
@@ -93,10 +103,11 @@ export default function Create() {
     else if (minT < maxRaise * 0.1) e.minTarget = `At least 10% of max raise (${(maxRaise * 0.1).toFixed(1)} SOL)`
     else if (minT > maxRaise) e.minTarget = 'Cannot exceed max raise'
     if (!(Number.isInteger(f.durationMin) && f.durationMin >= MIN_WIN && f.durationMin <= MAX_WIN)) e.durationMin = `Choose ${MIN_WIN}–${MAX_WIN} minutes`
-    if (!QUOTES.some((q) => q.symbol === f.quote && q.live)) e.quote = 'Only SOL pairs are live right now'
-    if (wallet && !e.creatorBuy && 0.02 + reserve + creatorBuy > bal) e.creatorBuy = 'Not enough test SOL for the fee, reserve and your dev buy'
+    if (!quoteLive(f.quoteMint)) e.quote = `$${f.ticker || 'TOKEN'}/${f.quote} is preview-only: this quote is not enabled for Floof launches on this network yet.`
+    else if (!isSolQuote && !qn) e.quote = `No live ${f.quote} price right now, so the migration target cannot be sized. Try again shortly.`
+    if (wallet && !e.creatorBuy && 0.02 + reserve + (isSolQuote ? creatorBuy : 0) > bal) e.creatorBuy = 'Not enough test SOL for the fee, reserve and your dev buy'
     return e
-  }, [f, maxRaise, creatorBuy, minT, bal, wallet, reserve])
+  }, [f, maxRaise, creatorBuy, minT, bal, wallet, reserve, quoteList, qn, isSolQuote])
   const stepFields = [['name', 'ticker', 'desc', 'web', 'x', 'tg'], ['durationMin', 'maxRaise', 'minTarget'], ['creatorBuy', 'lockDays', 'quote'], []]
   const stepOk = (i: number) => stepFields[i].every((k) => !errors[k])
   const next = () => { setTouched(true); setChecked(false); if (stepOk(step)) { setStep((s) => Math.min(3, s + 1)); setTouched(false) } }
@@ -144,7 +155,7 @@ export default function Create() {
       </div>
 
       <div className="mt-5 grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
-        <Card className="p-5 md:p-6" data-cursor="native">
+        <Card className="min-w-0 p-5 md:p-6" data-cursor="native">
           <AnimatePresence mode="wait">
             <motion.div key={step} initial={{ opacity: 0, x: 24 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -24 }} transition={{ duration: 0.22 }}>
               {step === 0 && (
@@ -185,7 +196,7 @@ export default function Create() {
                   <SliderField label="Fair window duration" value={`${f.durationMin} min`} hint="opens the moment your coin is created" error={err('durationMin')}
                     min={MIN_WIN} max={MAX_WIN} step={5} v={f.durationMin} onChange={(v) => set('durationMin', v)} aria="Fair window duration in minutes" ticks={['5 min', '15', '30', '45', '60 min']} accent="blue" />
                   <div>
-                    <SliderField label="Presale raise" value={`${fmtSol(maxRaise)} SOL`} hint={`0–${fmtSol(MAX_BUY_SOL - creatorBuy)} SOL`} error={err('maxRaise')}
+                    <SliderField label="Presale raise" value={qn ? `${qAmt(maxRaise)} ${Q}` : `${fmtSol(maxRaise)} SOL`} hint={qn ? `≈ ${fmtSol(maxRaise)} SOL of curve · sized in SOL, paid in ${Q}` : `0–${fmtSol(MAX_BUY_SOL - creatorBuy)} SOL`} error={err('maxRaise')}
                       min={0} max={MAX_BUY_SOL - creatorBuy} step={0.5} v={maxRaise} onChange={(v) => { set('maxRaise', fmtSol(v)); if ((parseFloat(f.minTarget) || 0) > v || (v > 0 && (parseFloat(f.minTarget) || 0) < v * 0.1) || v === 0) set('minTarget', fmtSol(v === 0 ? 0 : Math.max(v * 0.5, 0))) }} aria="Presale raise in SOL" ticks={['0', '20', '40', '60', `${fmtSol(MAX_BUY_SOL - creatorBuy)} SOL`]} accent="pink" />
                   </div>
                   <div className="grid gap-4 sm:grid-cols-2">
@@ -205,19 +216,10 @@ export default function Create() {
               {step === 2 && (
                 <div className="space-y-6">
                   <div>
-                    <div className="mb-2 flex items-end justify-between"><div className="label">Quote pair</div><span className="text-[11px] font-bold text-lav/60">what buyers pay with</span></div>
-                    <div className="grid gap-2 sm:grid-cols-4" role="radiogroup" aria-label="Quote pair">
-                      {QUOTES.map((q) => (
-                        <button key={q.symbol} type="button" role="radio" aria-checked={f.quote === q.symbol} aria-disabled={!q.live} title={q.note || q.name} onClick={() => q.live && set('quote', q.symbol)}
-                          className={cx('relative rounded-2xl px-3 py-3 text-left ring-1 transition', f.quote === q.symbol ? 'bg-pink/15 ring-pink/60' : q.live ? 'ring-lav/20 hover:ring-pink/40' : 'cursor-not-allowed opacity-55 ring-lav/10')}>
-                          <div className="flex items-center justify-between"><span className="font-display text-lg font-extrabold">${f.ticker || 'TOKEN'}/{q.symbol}</span>{f.quote === q.symbol && <ICheck s={14} className="text-pink" />}</div>
-                          <div className="mt-0.5 text-[11px] font-bold text-lav">{q.live ? `${q.name} · migrates at ${q.graduation}` : 'Coming soon'}</div>
-                        </button>
-                      ))}
-                    </div>
-                    <p className="mt-2 text-[11px] font-semibold text-lav/70">Raydium LaunchLab supports more quote mints (USD1, USDC, USDT and others). Floof’s fair-window escrow holds SOL today, so stable pairs arrive once the escrow supports SPL tokens.</p>
+                    <PairPicker ticker={f.ticker} value={f.quoteMint} onSelect={(q) => setF((p) => ({ ...p, quote: q.symbol, quoteMint: q.mint }))} raiseSol={maxRaise} devBuySol={creatorBuy} launchable={quoteLive} coin={{ image: f.image, hue: f.hue, acc: f.acc }} />
+                    {touched && errors.quote && <div className="mt-2 text-xs font-extrabold text-danger" role="alert">{errors.quote}</div>}
                   </div>
-                  <SliderField label="Dev buy" value={`${fmtSol(creatorBuy)} SOL`} hint="optional · same clearing price as every pledger" error={err('creatorBuy')}
+                  <SliderField label="Dev buy" value={qn ? `${qAmt(creatorBuy)} ${Q}` : `${fmtSol(creatorBuy)} SOL`} hint="optional · same clearing price as every pledger" error={err('creatorBuy')}
                     min={0} max={Math.max(0, Math.min(10, MAX_BUY_SOL - maxRaise))} step={0.1} v={creatorBuy} onChange={(v) => set('creatorBuy', fmtSol(v))} aria="Dev buy in SOL" ticks={['0', `${fmtSol(Math.max(0, Math.min(10, MAX_BUY_SOL - maxRaise)))} SOL`]} accent="blue" />
                   {curve && creatorBuy > 0 && <div className="grid gap-2 rounded-2xl bg-night/50 p-4 text-sm font-bold ring-1 ring-lav/10 sm:grid-cols-3">
                     <Stat k="You receive" v={`${(Number(curve.creatorTokens) / 1e12).toFixed(2)}M tokens`} />
@@ -237,12 +239,12 @@ export default function Create() {
               {step === 3 && (
                 <div className="space-y-4">
                   <div className="divide-y divide-lav/10 rounded-2xl bg-night/50 text-sm ring-1 ring-lav/10">
-                    {[['Coin', `${f.name} · $${f.ticker}`], ['Pair', `$${f.ticker}/${f.quote}`], ['Fair window', `opens at creation · ${f.durationMin} min`], ['First buy', `${(maxRaise + creatorBuy).toFixed(2)} SOL (${fmtSol(maxRaise)} presale + ${fmtSol(creatorBuy)} dev buy)`], ['Clearing price at full raise', `${fmtPrice(ceiling)} SOL`], ['Supply bought at full raise', `${curve ? curve.pctOfSupply.toFixed(2) : '0'}% · ${(windowTokens / 1e6).toFixed(1)}M to presale`], ['Max raise / min target', `${maxRaise} / ${minT} SOL`], ['Migrates to Raydium at', `~${curve?.graduationSol ?? 85} SOL on the curve`], ['Per-account cap', `${(maxRaise * 0.01).toFixed(2)} SOL`], ['Dev lock', creatorBuy === 0 ? 'no dev buy' : f.lockDays ? `${f.lockDays} days` : 'none'], ['After window', devnet?'Raydium LaunchLab':'Sandbox trading pool'], [devnet?'Trading fee':'Sandbox trading fee', `${FEES.total}% (${FEES.raydium} Raydium · ${FEES.creator} you · ${FEES.platform} platform)`]].map(([k, v]) => (
+                    {[['Coin', `${f.name} · $${f.ticker}`], ['Pair', `$${f.ticker}/${f.quote}`], ['Fair window', `opens at creation · ${f.durationMin} min`], ['First buy', qn ? `${fmtQuoteAmount(qn.firstBuy, quoteTok?.decimals)} ${Q} (${fmtQuoteAmount(qn.raise, quoteTok?.decimals)} presale + ${fmtQuoteAmount(qn.devBuy, quoteTok?.decimals)} dev buy)` : `${(maxRaise + creatorBuy).toFixed(2)} SOL (${fmtSol(maxRaise)} presale + ${fmtSol(creatorBuy)} dev buy)`], ['Clearing price at full raise', qn ? `${fmtPrice(qn.avgPrice)} ${Q}` : `${fmtPrice(ceiling)} SOL`], ['Supply bought at full raise', `${curve ? curve.pctOfSupply.toFixed(2) : '0'}% · ${(windowTokens / 1e6).toFixed(1)}M to presale`], ['Max raise / min target', `${qAmt(maxRaise)} / ${qAmt(minT)} ${Q}`], ['Migrates to Raydium at', qn ? `~${fmtQuoteAmount(qn.target.ui, quoteTok?.decimals)} ${Q} on the curve (USD value of 85 SOL, fixed at creation)` : `~${curve?.graduationSol ?? 85} SOL on the curve`], ['Per-account cap', `${qAmt(maxRaise * 0.01)} ${Q}`], ['Dev lock', creatorBuy === 0 ? 'no dev buy' : f.lockDays ? `${f.lockDays} days` : 'none'], ['After window', devnet?'Raydium LaunchLab':'Sandbox trading pool'], [devnet?'Trading fee':'Sandbox trading fee', `${FEES.total}% (${FEES.raydium} Raydium · ${FEES.creator} you · ${FEES.platform} platform)`]].map(([k, v]) => (
                       <div key={k} className="flex justify-between gap-4 px-4 py-2.5"><span className="font-bold text-lav">{k}</span><span className="text-right font-extrabold">{v}</span></div>
                     ))}
                   </div>
-                  <div className="flex items-center justify-between rounded-2xl bg-blue/10 px-4 py-3 font-extrabold ring-1 ring-blue/25"><span className="flex items-center gap-2"><ILock s={16} /> Due now</span><span className="font-num tnum">{(0.02 + reserve + creatorBuy).toFixed(2)} test SOL</span></div>
-                  <p className="text-xs font-semibold text-lav">0.02 test SOL is the creation fee{creatorBuy > 0 ? `; your ${fmtSol(creatorBuy)} SOL dev buy is escrowed and refunded if the window misses its target` : ''}. {devnet?'An additional 0.1 test SOL funds pool rent; unused reserve can be reclaimed. Network and account rent are additional. ':''} {wallet ? `Balance after creation: ${(bal - 0.02 - reserve - creatorBuy).toFixed(2)} test SOL.` : devnet ? 'Connect Phantom with Devnet SOL to continue.' : 'Open your sandbox to receive a test balance.'}</p>
+                  <div className="flex items-center justify-between rounded-2xl bg-blue/10 px-4 py-3 font-extrabold ring-1 ring-blue/25"><span className="flex items-center gap-2"><ILock s={16} /> Due now</span><span className="font-num tnum">{isSolQuote ? `${(0.02 + reserve + creatorBuy).toFixed(2)} test SOL` : `${(0.02 + reserve).toFixed(2)} test SOL${creatorBuy > 0 ? ` + ${qAmt(creatorBuy)} ${Q}` : ''}`}</span></div>
+                  <p className="text-xs font-semibold text-lav">0.02 test SOL is the creation fee{creatorBuy > 0 ? `; your ${qAmt(creatorBuy)} ${Q} dev buy is escrowed and refunded if the window misses its target` : ''}.{!isSolQuote ? ` Pledges, refunds and the dev buy are in ${Q}; the ${Q} amounts above use the live price and are fixed by Floof's signed price when you create.` : ''} {devnet?'An additional 0.1 test SOL funds pool rent; unused reserve can be reclaimed. Network and account rent are additional. ':''} {wallet ? `Balance after creation: ${(bal - 0.02 - reserve - (isSolQuote ? creatorBuy : 0)).toFixed(2)} test SOL.` : devnet ? 'Connect Phantom with Devnet SOL to continue.' : 'Open your sandbox to receive a test balance.'}</p>
                   <label className="flex cursor-pointer items-start gap-3 text-sm font-bold text-lav"><input type="checkbox" className="mt-1 h-4 w-4 accent-[#FF5FB8]" checked={checked} onChange={e => setChecked(e.target.checked)} />I reviewed these settings. They cannot be edited after creation. {devnet ? 'This reserves a Devnet launch using test SOL. A token is minted if its window settles successfully.' : 'This creates a test launch with no real SOL or on-chain token.'}</label>
                 </div>
               )}

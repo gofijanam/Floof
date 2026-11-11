@@ -34,7 +34,7 @@ export async function linkWallet(){try{
  }catch(e){toast({kind:'info',title:'Wallet link not completed',body:(e as Error).message})}}
 const pendingPledges = new Map<string,any>()
 export async function pledge(coin:string,amount:number){
- if(state.mode==='devnet')return chainAction('pledge',{window:coin,amount:String(Math.round(amount*1e9))})
+ if(state.mode==='devnet'){const d=state.coins.find(c=>c.id===coin)?.quoteDecimals??9;return chainAction('pledge',{window:coin,amount:String(Math.round(amount*10**d))})}
  const key = `${coin}:${amount}`
  let payload = pendingPledges.get(key)
  if (!payload) { const att = await api('/pledge/attest',{coin}); payload={coin,amount,attestation:att.id}; pendingPledges.set(key,payload) }
