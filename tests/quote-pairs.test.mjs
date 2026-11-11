@@ -1,0 +1,15 @@
+import test from 'node:test';import assert from 'node:assert/strict';
+import {firstBuyQuote,maxFirstBuyFor,migrationTarget,GRADUATION_QUOTE,MAX_FIRST_BUY,standardCurve,buyExactIn} from '../server/launchlab-curve.mjs';
+import {quoteMessage,setQuoteIx,createQuoteIxs,launchlabConfigAddress,qata,isSolWindow} from '../server/quote-client.mjs';
+import {GLOBAL,WSOL,LAUNCHLAB} from '../server/chain-client.mjs';
+import {Keypair,PublicKey} from '@solana/web3.js';import {TOKEN_2022_PROGRAM_ID} from '@solana/spl-token';
+test('SOL defaults are unchanged by the quote parameters',()=>{const a=firstBuyQuote({raise:40n*10n**9n,creatorBuy:2n*10n**9n}),b=firstBuyQuote({raise:40n*10n**9n,creatorBuy:2n*10n**9n,target:GRADUATION_QUOTE,decimals:9});assert.deepEqual(a,b);assert.equal(maxFirstBuyFor(GRADUATION_QUOTE),MAX_FIRST_BUY);});
+test('migration target = USD value of 85 SOL in the quote',()=>{assert.equal(migrationTarget({solUsd:150,quoteUsd:1,decimals:6}),12_750_000_000n);assert.equal(migrationTarget({solUsd:150,quoteUsd:300,decimals:8}),4_250_000_000n);assert.throws(()=>migrationTarget({solUsd:0,quoteUsd:1,decimals:6}));});
+test('same supply share for the same USD raise in any quote',()=>{const sol=firstBuyQuote({raise:20n*10n**9n}),usd=firstBuyQuote({raise:3_000_000_000n,target:12_750_000_000n,decimals:6}),x=firstBuyQuote({raise:1_000_000_000n,target:4_250_000_000n,decimals:8});
+ assert(Math.abs(sol.pctOfSupply-usd.pctOfSupply)<1e-6&&Math.abs(sol.pctOfSupply-x.pctOfSupply)<1e-6);assert.equal(usd.graduationSol,12750);assert.equal(x.graduationSol,42.5);assert(Math.abs(usd.avgPrice/sol.avgPrice-150)<1e-6);});
+test('max first buy completes the curve for any target',()=>{for(const t of [12_750_000_000n,4_250_000_000n,GRADUATION_QUOTE]){const c=standardCurve({target:t});assert(buyExactIn(c,maxFirstBuyFor(t)).completes)}});
+test('quote attestation message binds program, mint, target and expiry',()=>{const m=Keypair.generate().publicKey,p=Keypair.generate().publicKey;const a=quoteMessage(m,5n,9,p);assert.equal(a.length,14+32+32+8+8);assert.notDeepEqual(a,quoteMessage(m,6n,9,p));assert.notDeepEqual(a,quoteMessage(m,5n,10,p));});
+test('LaunchLab config PDA matches the SOL GlobalConfig derivation',()=>{assert(launchlabConfigAddress(WSOL).equals(GLOBAL));});
+test('quote instructions encode their accounts',async()=>{const k=()=>Keypair.generate().publicKey,mint=k(),q={mint,global:k(),tokenProgram:TOKEN_2022_PROGRAM_ID};const ix=await setQuoteIx(k(),k(),q,{enabled:true,issuerControls:false,minPledge:1n,minFirstBuy:1n,targetMin:1n,targetMax:2n});assert.equal(ix.keys.length,8);assert.equal(ix.data.length,8+2+32);assert(ix.keys[6].pubkey.equals(TOKEN_2022_PROGRAM_ID));
+ const c=await createQuoteIxs(k(),k(),k(),q,{nonce:1,name:'Ab',symbol:'AB',uri:'https://x',walletAge:false,history:false,duration:600,minTarget:1n,maxRaise:10n,creatorBuy:0n,lockDays:0},{target:5n,expiry:9,attestor:k(),signature:Buffer.alloc(64)});assert.equal(c.instructions.length,2);assert(c.addresses.escrow.equals(qata(c.addresses.launcher,mint,TOKEN_2022_PROGRAM_ID)));
+ assert(isSolWindow({global:GLOBAL})&&!isSolWindow({global:q.global}));});

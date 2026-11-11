@@ -44,16 +44,25 @@ export function splitFirstBuy(budget,creatorBuy,spent,tokens){budget=BigInt(budg
  * Live Create-page quote for a fair-window first buy on the standard curve.
  * raise/creatorBuy in lamports. Returns bigint lamports/base units plus display numbers.
  */
-export function firstBuyQuote({raise=0n,creatorBuy=0n,locked=0n}={}){
+/** Quote-pair aware: `target` (raw quote units, default 85 SOL) and `decimals` (default 9) parameterise the
+ * same standard curve for any LaunchLab quote. SOL callers are unchanged. */
+export function firstBuyQuote({raise=0n,creatorBuy=0n,locked=0n,target=GRADUATION_QUOTE,decimals=9}={}){
+ target=BigInt(target);const unit=10**decimals;
  raise=BigInt(raise);creatorBuy=BigInt(creatorBuy);if(raise<0n||creatorBuy<0n)throw Error('Invalid amount');
- const curve=standardCurve({locked}),budget=raise+creatorBuy,buy=buyExactIn(curve,budget);
+ const curve=standardCurve({locked,target}),budget=raise+creatorBuy,buy=buyExactIn(curve,budget);
  const {creatorSpent,creatorTokens}=splitFirstBuy(budget||1n,creatorBuy,buy.spent,buy.tokens);
- const after={...curve,realBase:buy.tokens,realQuote:buy.net},startPrice=Number(curve.virtualQuote)/Number(curve.virtualBase)/1000;
- const spotAfter=(Number(after.virtualQuote+after.realQuote)/Number(after.virtualBase-after.realBase))/1000; // SOL per whole token
- const avgPrice=buy.tokens>0n?Number(buy.spent)/1e9/(Number(buy.tokens)/1e6):startPrice;
+ const after={...curve,realBase:buy.tokens,realQuote:buy.net},startPrice=Number(curve.virtualQuote)/Number(curve.virtualBase)*1e6/unit;
+ const spotAfter=(Number(after.virtualQuote+after.realQuote)/Number(after.virtualBase-after.realBase))*1e6/unit; // quote per whole token
+ const avgPrice=buy.tokens>0n?Number(buy.spent)/unit/(Number(buy.tokens)/1e6):startPrice;
  const remainingNet=curve.target>after.realQuote?curve.target-after.realQuote:0n;
  return {budget,spent:buy.spent,fee:buy.fee,tokens:buy.tokens,completes:buy.completes,unspent:budget-buy.spent,creatorSpent,creatorTokens,windowTokens:buy.tokens-creatorTokens,pledgeSpent:buy.spent-creatorSpent,
   pctOfSupply:Number(buy.tokens)/Number(curve.supply)*100,pctOfCurve:Number(buy.tokens)/Number(curve.totalSell)*100,avgPrice,startPrice,spotAfter,
-  impliedMcapSol:avgPrice*Number(curve.supply)/1e6,mcapAfterSol:spotAfter*Number(curve.supply)/1e6,curveSolAfter:Number(after.realQuote)/1e9,
-  remainingToMigrateSol:Number(remainingNet)/1e9,remainingToMigrateGrossSol:Number(ceil(remainingNet*FEE_DENOMINATOR,FEE_DENOMINATOR-FEE_RATE))/1e9,graduationSol:Number(curve.target)/1e9,capacitySol:Number(curveCapacity({locked}))/1e9};
+  impliedMcapSol:avgPrice*Number(curve.supply)/1e6,mcapAfterSol:spotAfter*Number(curve.supply)/1e6,curveSolAfter:Number(after.realQuote)/unit,
+  remainingToMigrateSol:Number(remainingNet)/unit,remainingToMigrateGrossSol:Number(ceil(remainingNet*FEE_DENOMINATOR,FEE_DENOMINATOR-FEE_RATE))/unit,graduationSol:Number(curve.target)/unit,capacitySol:Number(curveCapacity({locked,target}))/unit,
+  target,decimals};
 }
+
+/** Program rule (quote.rs max_first_buy): same 86/85 headroom as the SOL path. */
+export const maxFirstBuyFor=target=>{target=BigInt(target);return (target*MAX_FIRST_BUY+GRADUATION_QUOTE-1n)/GRADUATION_QUOTE};
+/** Migration target in raw quote units = USD value of 85 SOL at creation (rounded down). Prices as decimal strings/numbers in USD. */
+export function migrationTarget({solUsd,quoteUsd,decimals}){const scale=1_000_000_000n,s=BigInt(Math.round(Number(solUsd)*1e9)),q=BigInt(Math.round(Number(quoteUsd)*1e9));if(s<=0n||q<=0n)throw Error('Invalid price');return GRADUATION_QUOTE*s*10n**BigInt(decimals)/(q*scale)}

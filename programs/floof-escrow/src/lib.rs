@@ -16,6 +16,8 @@ mod launchlab;
 use launchlab::*;
 mod rewards;
 use rewards::*;
+mod quote;
+use quote::*;
 /// Configurable cap on `max_raise + creator_buy` (lamports, gross of LaunchLab's 1% fee).
 /// The standard LaunchLab curve completes at 85 SOL net of fees (~85.86 SOL gross), so 86 SOL
 /// lets a window buy the whole curve; any quote LaunchLab does not consume is refunded pro-rata.
@@ -39,7 +41,7 @@ pub mod floof_escrow {
  pub fn claim_scout(ctx:Context<ClaimScout>,amount:u64,proof:Vec<[u8;32]>)->Result<()>{rewards::claim(ctx,amount,proof)}
  pub fn claim_refund(ctx:Context<ClaimRefund>)->Result<()>{
   let w=&ctx.accounts.window;let p=&mut ctx.accounts.pledge;
-  require!(w.state==REFUNDING&&!p.claimed,ErrCode::State);
+  require!(is_sol(w)&&w.state==REFUNDING&&!p.claimed,ErrCode::State);
   move_lamports(&w.to_account_info(),&ctx.accounts.wallet.to_account_info(),p.amount)?;
   p.claimed=true;emit!(Claimed{window:w.key(),wallet:p.wallet,tokens:0,refund:p.amount});Ok(())
  }
@@ -60,7 +62,7 @@ pub mod floof_escrow {
  }
  pub fn pledge(ctx:Context<PledgeFunds>,amount:u64,cluster:[u8;32],expiry:i64)->Result<()>{
   let now=Clock::get()?.unix_timestamp;let w=&ctx.accounts.window;
-  require!(!ctx.accounts.config.paused&&w.state==OPEN,ErrCode::Paused);require!(now>=w.start&&now<w.end&&expiry>now&&expiry<=now+300,ErrCode::Time);require!(amount>=10_000_000,ErrCode::Amount);
+  require!(is_sol(w),ErrCode::State);require!(!ctx.accounts.config.paused&&w.state==OPEN,ErrCode::Paused);require!(now>=w.start&&now<w.end&&expiry>now&&expiry<=now+300,ErrCode::Time);require!(amount>=10_000_000,ErrCode::Amount);
   let message=attestation_message(&crate::ID,&ctx.accounts.wallet.key(),&w.key(),&cluster,expiry);
   verify_attestation(&ctx.accounts.instructions.to_account_info(),&ctx.accounts.config.attestor,&message)?;
   let p=&mut ctx.accounts.pledge;let group=&mut ctx.accounts.cluster_cap;
@@ -79,16 +81,25 @@ pub mod floof_escrow {
  }
  pub fn abort_stalled(ctx:Context<Settle>)->Result<()>{let w=&mut ctx.accounts.window;require!(w.state==OPEN&&Clock::get()?.unix_timestamp>=w.end+3600,ErrCode::Time);w.state=REFUNDING;emit!(WindowSettled{window:w.key(),state:w.state,raised:0});Ok(())}
  pub fn claim(ctx:Context<Claim>)->Result<()>{
-  let w=&ctx.accounts.window;let p=&mut ctx.accounts.pledge;require!(!p.claimed,ErrCode::Claimed);require!(w.state==LIVE||w.state==REFUNDING,ErrCode::State);
+  let w=&ctx.accounts.window;let p=&mut ctx.accounts.pledge;require!(is_sol(w),ErrCode::State);require!(!p.claimed,ErrCode::Claimed);require!(w.state==LIVE||w.state==REFUNDING,ErrCode::State);
   let allocation=allocate(p.amount,w.pledged,w.raised,w.window_tokens,w.state==REFUNDING)?;
   if allocation.tokens>0{let mint=w.mint;let bump=[w.bump];let signer:&[&[u8]]=&[b"window",mint.as_ref(),&bump];token::transfer(CpiContext::new_with_signer(ctx.accounts.token_program.to_account_info(),Transfer{from:ctx.accounts.token_vault.to_account_info(),to:ctx.accounts.destination.to_account_info(),authority:w.to_account_info()},&[signer]),allocation.tokens)?;}
   move_lamports(&w.to_account_info(),&ctx.accounts.wallet.to_account_info(),allocation.refund)?;p.claimed=true;emit!(Claimed{window:w.key(),wallet:p.wallet,tokens:allocation.tokens,refund:allocation.refund});Ok(())
  }
  pub fn settle_launch(ctx:Context<SettleLaunch>)->Result<()>{launchlab::settle(ctx)}
+ // ---- Token-quoted windows (SPL Token / Token-2022). See quote.rs. ----
+ pub fn set_quote(ctx:Context<SetQuote>,params:QuoteParams)->Result<()>{quote::q_set_quote(ctx,params)}
+ pub fn create_coin_quote(ctx:Context<CreateCoinQuote>,params:CreateParams,target:u64,expiry:i64)->Result<()>{quote::q_create(ctx,params,target,expiry)}
+ pub fn pledge_quote(ctx:Context<PledgeQuote>,amount:u64,cluster:[u8;32],expiry:i64)->Result<()>{quote::q_pledge(ctx,amount,cluster,expiry)}
+ pub fn claim_refund_quote(ctx:Context<QuoteRefund>)->Result<()>{quote::q_claim_refund(ctx)}
+ pub fn claim_quote(ctx:Context<QuoteClaim>)->Result<()>{quote::q_claim(ctx)}
+ pub fn refund_creator_buy_quote(ctx:Context<QuoteCreatorRefund>)->Result<()>{quote::q_refund_creator_buy(ctx)}
+ pub fn settle_launch_quote(ctx:Context<SettleQuote>)->Result<()>{quote::q_settle(ctx)}
+ pub fn claim_creator_fees_quote(ctx:Context<QuoteCreatorFees>)->Result<()>{quote::q_fees(ctx)}
  pub fn claim_reserve(ctx:Context<ClaimReserve>)->Result<()>{launchlab::reserve(ctx)}
  pub fn claim_creator_fees(ctx:Context<ClaimCreatorFees>)->Result<()>{launchlab::fees(ctx)}
  /// A failed window never spent the creator's first-buy deposit: the creator takes it back.
- pub fn refund_creator_buy(ctx:Context<CreatorWindow>)->Result<()>{let w=&mut ctx.accounts.window;require!(w.state==REFUNDING&&w.creator_buy>0&&!w.creator_refunded,ErrCode::State);w.creator_refunded=true;let amount=w.creator_buy;move_lamports(&w.to_account_info(),&ctx.accounts.creator.to_account_info(),amount)}
+ pub fn refund_creator_buy(ctx:Context<CreatorWindow>)->Result<()>{let w=&mut ctx.accounts.window;require!(is_sol(w)&&w.state==REFUNDING&&w.creator_buy>0&&!w.creator_refunded,ErrCode::State);w.creator_refunded=true;let amount=w.creator_buy;move_lamports(&w.to_account_info(),&ctx.accounts.creator.to_account_info(),amount)}
  /// Locked dev-buy tokens wait in the window vault until the creator lock ends.
  pub fn claim_dev_buy(ctx:Context<ClaimDevBuy>)->Result<()>{let w=&ctx.accounts.window;require!(w.state==LIVE&&!w.dev_claimed&&w.creator_buy_tokens>0&&Clock::get()?.unix_timestamp>=w.vest_at,ErrCode::Time);let amount=w.creator_buy_tokens;let mint=w.mint;let bump=[w.bump];let signer:&[&[u8]]=&[b"window",mint.as_ref(),&bump];token::transfer(CpiContext::new_with_signer(ctx.accounts.token_program.to_account_info(),Transfer{from:ctx.accounts.token_vault.to_account_info(),to:ctx.accounts.destination.to_account_info(),authority:w.to_account_info()},&[signer]),amount)?;ctx.accounts.window.dev_claimed=true;Ok(())}
 }
@@ -160,13 +171,13 @@ let filled=mul_div_up(amount,raised,total)?;Ok(Allocation{filled,refund:amount-f
 pub fn split_first_buy(budget:u64,creator_buy:u64,spent:u64,bought:u64)->Result<(u64,u64)>{require!(budget>0&&creator_buy<=budget&&spent<=budget,ErrCode::Amount);if creator_buy==0||spent==0{return Ok((0,0))}let creator_spent=mul_div(spent,creator_buy,budget)?;Ok((creator_spent,mul_div(bought,creator_spent,spent)?))}
 pub fn move_lamports(from:&AccountInfo,to:&AccountInfo,amount:u64)->Result<()>{require!(from.owner==&crate::ID,ErrCode::Owner);let remaining=from.lamports().checked_sub(amount).ok_or(ErrCode::Amount)?;require!(remaining>=Rent::get()?.minimum_balance(from.data_len()),ErrCode::Amount);**from.try_borrow_mut_lamports()?=remaining;**to.try_borrow_mut_lamports()?=to.lamports().checked_add(amount).ok_or(ErrCode::Overflow)?;Ok(())}
 pub fn attestation_message(program:&Pubkey,wallet:&Pubkey,window:&Pubkey,cluster:&[u8;32],expiry:i64)->Vec<u8>{[b"floof-pledge-v1".as_slice(),program.as_ref(),wallet.as_ref(),window.as_ref(),cluster.as_ref(),&expiry.to_le_bytes()].concat()}
-fn verify_attestation(sysvar:&AccountInfo,key:&Pubkey,message:&[u8])->Result<()>{let current=load_current_index_checked(sysvar)?;require!(current>0,ErrCode::Signature);let ix=load_instruction_at_checked((current-1)as usize,sysvar)?;require!(ix.program_id==pubkey!("Ed25519SigVerify111111111111111111111111111")&&ix.accounts.is_empty(),ErrCode::Signature);verify_ed25519_data(&ix.data,key,message)}
+pub fn verify_attestation(sysvar:&AccountInfo,key:&Pubkey,message:&[u8])->Result<()>{let current=load_current_index_checked(sysvar)?;require!(current>0,ErrCode::Signature);let ix=load_instruction_at_checked((current-1)as usize,sysvar)?;require!(ix.program_id==pubkey!("Ed25519SigVerify111111111111111111111111111")&&ix.accounts.is_empty(),ErrCode::Signature);verify_ed25519_data(&ix.data,key,message)}
 pub fn verify_ed25519_data(d:&[u8],key:&Pubkey,message:&[u8])->Result<()>{require!(d.len()>=16&&d[0]==1&&d[1]==0,ErrCode::Signature);let read=|i:usize|u16::from_le_bytes([d[i],d[i+1]])as usize;let sig=read(2);let sig_ix=read(4);let pk=read(6);let pk_ix=read(8);let msg=read(10);let size=read(12);let msg_ix=read(14);require!(sig_ix==65535&&pk_ix==65535&&msg_ix==65535&&sig>=16&&pk>=16&&msg>=16&&sig+64<=d.len()&&pk+32<=d.len()&&msg+size<=d.len()&&size==message.len(),ErrCode::Signature);require!(&d[pk..pk+32]==key.as_ref()&&&d[msg..msg+size]==message,ErrCode::Signature);Ok(())}
 #[event]pub struct WindowCreated{pub window:Pubkey,pub creator:Pubkey,pub mint:Pubkey,pub end:i64}
 #[event]pub struct Pledged{pub window:Pubkey,pub wallet:Pubkey,pub amount:u64,pub total:u64}
 #[event]pub struct WindowSettled{pub window:Pubkey,pub state:u8,pub raised:u64}
 #[event]pub struct Claimed{pub window:Pubkey,pub wallet:Pubkey,pub tokens:u64,pub refund:u64}
-#[error_code]pub enum ErrCode{#[msg("Invalid configuration")]Config,#[msg("Protocol paused")]Paused,#[msg("Invalid window or expiry time")]Time,#[msg("Invalid amount")]Amount,#[msg("Arithmetic overflow")]Overflow,#[msg("Cluster cap exceeded")]Cap,#[msg("Cluster cannot change for an existing pledge")]Cluster,#[msg("Attestation signature or message invalid")]Signature,#[msg("Already claimed")]Claimed,#[msg("Invalid state")]State,#[msg("Invalid account owner")]Owner,#[msg("Missing fraud proof")]Proof,#[msg("Successful windows require settle_launch; this refund-only instruction spent no escrow.")]LaunchAdapterUnavailable,#[msg("Raise plus creator buy must be between 0.01 SOL and the configured first-buy cap")]RaiseCap}
+#[error_code]pub enum ErrCode{#[msg("Invalid configuration")]Config,#[msg("Protocol paused")]Paused,#[msg("Invalid window or expiry time")]Time,#[msg("Invalid amount")]Amount,#[msg("Arithmetic overflow")]Overflow,#[msg("Cluster cap exceeded")]Cap,#[msg("Cluster cannot change for an existing pledge")]Cluster,#[msg("Attestation signature or message invalid")]Signature,#[msg("Already claimed")]Claimed,#[msg("Invalid state")]State,#[msg("Invalid account owner")]Owner,#[msg("Missing fraud proof")]Proof,#[msg("Successful windows require settle_launch; this refund-only instruction spent no escrow.")]LaunchAdapterUnavailable,#[msg("Raise plus creator buy must be between 0.01 SOL and the configured first-buy cap")]RaiseCap,#[msg("Quote mint has a disallowed Token-2022 extension")]QuoteMint,#[msg("Migration target outside the quote's allowed band")]Target}
 #[cfg(test)]mod tests{use super::*;
  #[test]fn pro_rata(){assert_eq!(allocate(3,12,10,300,false).unwrap(),Allocation{filled:3,refund:0,tokens:75});}
  #[test]fn all_refunds_fit_remaining_escrow(){for total in 2..200u64{for raised in 1..total{let refunds=(0..total).map(|_|allocate(1,total,raised,SUPPLY,false).unwrap().refund).sum::<u64>();assert!(refunds<=total-raised)}}}
