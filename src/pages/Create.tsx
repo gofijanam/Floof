@@ -1,4 +1,4 @@
-import { AnimatePresence, motion } from 'framer-motion'
+import { motion } from 'framer-motion'
 import { Children, cloneElement, isValidElement, useId, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { CoinAvatar } from '../components/CoinAvatar'
@@ -156,8 +156,9 @@ export default function Create() {
 
       <div className="mt-5 grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
         <Card className="min-w-0 p-5 md:p-6" data-cursor="native">
-          <AnimatePresence mode="wait">
-            <motion.div key={step} initial={{ opacity: 0, x: 24 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -24 }} transition={{ duration: 0.22 }}>
+          {/* Enter-only step transition: a "wait" exit could stall forever behind the pair picker's nested presence animations, leaving Review blank. */}
+          <>
+            <motion.div key={step} initial={{ opacity: 0, x: 24 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.22 }}>
               {step === 0 && (
                 <fieldset disabled={!draftReady || uploading} className="space-y-5">
                   <div className="grid gap-4 sm:grid-cols-[1fr_180px]">
@@ -224,7 +225,7 @@ export default function Create() {
                   {curve && creatorBuy > 0 && <div className="grid gap-2 rounded-2xl bg-night/50 p-4 text-sm font-bold ring-1 ring-lav/10 sm:grid-cols-3">
                     <Stat k="You receive" v={`${(Number(curve.creatorTokens) / 1e12).toFixed(2)}M tokens`} />
                     <Stat k="Share of supply" v={`${(Number(curve.creatorTokens) / 1e13).toFixed(2)}%`} />
-                    <Stat k="Your price" v={`${fmtPrice(curve.avgPrice)} SOL`} />
+                    <Stat k="Your price" v={qn ? `${fmtPrice(curve.avgPrice * qn.target.ui / 85)} ${Q}` : `${fmtPrice(curve.avgPrice)} SOL`} />
                   </div>}
                   <div className={cx(creatorBuy === 0 && 'pointer-events-none opacity-45')} aria-disabled={creatorBuy === 0}>
                     <SliderField label="Dev token lock" value={creatorBuy === 0 ? 'No dev buy' : f.lockDays === 0 ? 'No lock' : `${f.lockDays} days`} hint="optional · locks your dev-buy tokens on-chain" error={err('lockDays')}
@@ -249,7 +250,7 @@ export default function Create() {
                 </div>
               )}
             </motion.div>
-          </AnimatePresence>
+          </>
           <div className="mt-6 flex items-center justify-between border-t border-lav/10 pt-5">
             <button onClick={() => setStep((s) => Math.max(0, s - 1))} disabled={step === 0} className="btn-ghost disabled:opacity-30"><IBack s={16} /> Back</button>
             {touched && !stepOk(step) && <span className="text-xs font-extrabold text-danger">Fix the highlighted fields</span>}

@@ -27,14 +27,18 @@ export async function usdPrices(env,mints,fetcher=fetch){
  return {observedAt:new Date(priceCache.at).toISOString(),price:m=>priceCache.map.get(refs[m]||m)??null};
 }
 const meta=new Map(catalogue.quotes.map(q=>[q.mint,q]));
-export const quoteSymbol=mint=>meta.get(mint)?.symbol??`${mint.slice(0,4)}…`;
+// Well-known Devnet test mints borrow the catalogue entry of the mainnet token they stand in for (labels only; prices still go through QUOTE_PRICE_REFS).
+const DEVNET_ALIAS={USDCoctVLVnvTXBEuP9s8hntucdJokbo17RwHuNXemT:'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'};
+const metaFor=(mint,refs={})=>{const m=meta.get(mint);if(m)return m;const r=meta.get(refs[mint]||DEVNET_ALIAS[mint]);return r?{...r,name:`${r.name} (Devnet)`}:undefined};
+export const quoteSymbol=mint=>metaFor(mint)?.symbol??`${mint.slice(0,4)}…`;
 /** QuotesResponse for this deployment. `rpc` is null in sandbox mode (SOL only). */
 export async function listQuotes(env,rpc,{fetcher=fetch,program=PROGRAM.toBase58()}={}){
  const registry=rpc?(await quoteRegistry(rpc,program)).filter(q=>q.enabled):[];
  const prices=await usdPrices(env,[WSOL.toBase58(),...registry.map(q=>q.mint),...catalogue.quotes.map(q=>q.mint)],fetcher);
  const sol=meta.get(WSOL.toBase58());
  const quotes=[{mint:WSOL.toBase58(),symbol:'SOL',name:'Solana',logo:sol?.logo??null,decimals:9,group:'solana',token2022:false,configId:GLOBAL.toBase58(),minMigration:(rpc?await minFundRaising(rpc,GLOBAL.toBase58()):null)??'1',priceUsd:prices.price(WSOL.toBase58())}];
- for(const q of registry){const m=meta.get(q.mint);quotes.push({mint:q.mint,symbol:m?.symbol??`${q.mint.slice(0,4)}…`,name:m?.name??'Devnet test quote',logo:m?.logo??null,decimals:q.decimals,group:m?.group??'custom',token2022:q.tokenProgram===T22,configId:q.global,minMigration:await minFundRaising(rpc,q.global),priceUsd:prices.price(q.mint)})}
+ const refs=(()=>{try{return JSON.parse(env?.QUOTE_PRICE_REFS||'{}')}catch{return {}}})();
+ for(const q of registry){const m=metaFor(q.mint,refs);quotes.push({mint:q.mint,symbol:m?.symbol??`${q.mint.slice(0,4)}…`,name:m?.name??'Devnet test quote',logo:m?.logo??null,decimals:q.decimals,group:m?.group??'custom',token2022:q.tokenProgram===T22,configId:q.global,minMigration:await minFundRaising(rpc,q.global),priceUsd:prices.price(q.mint)})}
  const listed=new Set(quotes.map(q=>q.mint));
  for(const q of catalogue.quotes)if(!listed.has(q.mint))quotes.push({...q,configId:null,minMigration:null,priceUsd:prices.price(q.mint)});
  return {observedAt:prices.observedAt,source:`Floof ${rpc?'Devnet':'sandbox'} quote allowlist (${registry.length+1} launchable) + LaunchLab mainnet catalogue metadata (not launchable here) + Jupiter price/v3`,quotes};

@@ -33,3 +33,4 @@ test('indexer decodes QuoteWindowCreated events',async()=>{const d=Buffer.concat
  const p=PROGRAM.toBase58(),tx={slot:1,meta:{err:null,logMessages:[`Program ${p} invoke [1]`,'Program data: '+d.toString('base64'),`Program ${p} success`]},transaction:{message:{accountKeys:[p],instructions:[{programIdIndex:0}]}}};
  const [e]=await decodeEvents(tx,p);assert.equal(e.kind,'QuoteWindowCreated');assert.equal(e.quoteMint,mint.toBase58());assert.equal(e.target,'12750000000');assert.equal(e.creatorBuy,'5');});
 test('QuoteConfig decoder rejects foreign accounts',async()=>{await assert.rejects(decodeQuoteConfig(Buffer.alloc(140)));});
+test('Devnet USDC is labelled like USDC, not a truncated mint',async()=>{const {quoteSymbol}=await import('../server/quotes.mjs');assert.equal(quoteSymbol('USDCoctVLVnvTXBEuP9s8hntucdJokbo17RwHuNXemT'),'USDC');assert.match(quoteSymbol(mint.toBase58()),/…$/);});
