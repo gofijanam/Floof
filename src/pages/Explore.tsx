@@ -7,7 +7,7 @@ import { Tabs, GradeBadge, cx, Countdown, MiniMeter, LiveDot } from '../componen
 import { PeekMochi } from '../components/ui'
 import { IExplore, IFilter, ICreate } from '../components/icons'
 import { useStore } from '../lib/store'
-import { creatorBy, Coin, CoinStatus, Grade, maxRaise, SUPPLY, GRADUATE_SOL } from '../lib/mock'
+import { creatorBy, Coin, CoinStatus, Grade, maxRaise, SUPPLY, graduationOf } from '../lib/mock'
 import { fmtPrice, fmtUsd, hms, SOL_USD } from '../lib/format'
 
 const GRADES: (Grade | 'any')[] = ['any', 'A+', 'A', 'B', 'C']
@@ -118,7 +118,7 @@ function ListView({ list, now }: { list: Coin[]; now: number }) {
                 <td className="px-4 py-3 tnum">{c.status === 'open' ? <Countdown ms={c.windowEnd - now} size="sm" /> : c.status === 'upcoming' ? <span className="text-blue">in {hms(c.windowStart - now)}</span> : c.status === 'curve' ? <span className="text-pink">On curve</span> : <span className="text-lav">CPMM</span>}</td>
                 <td className="px-4 py-3 font-num tnum">{pre ? `${c.pledged.toFixed(1)} / ${maxRaise(c).toFixed(0)} SOL` : fmtUsd(c.price * SUPPLY * SOL_USD)}</td>
                 <td className="px-4 py-3 font-num tnum">{fmtPrice(pre ? c.priceCeiling : c.price)}</td>
-                <td className="w-40 px-4 py-3">{c.status === 'open' ? <MiniMeter coin={c} /> : <div className="h-2 rounded-full bg-night"><div className="h-full rounded-full bg-gradient-to-r from-lav to-pink" style={{ width: `${(c.curveSol / GRADUATE_SOL) * 100}%` }} /></div>}</td>
+                <td className="w-40 px-4 py-3">{c.status === 'open' ? <MiniMeter coin={c} /> : <div className="h-2 rounded-full bg-night"><div className="h-full rounded-full bg-gradient-to-r from-lav to-pink" style={{ width: `${(c.curveSol / graduationOf(c)) * 100}%` }} /></div>}</td>
                 <td className="px-4 py-3"><GradeBadge g={c.truth.grade} /></td>
                 <td className="px-4 py-3 text-xs">@{cr.handle} <span className="text-mint tnum">{cr.rep}</span></td>
                 <td className="px-4 py-3 font-num text-blue tnum">{c.bondSol} SOL</td>

@@ -1,4 +1,5 @@
 import { fakeAddr, hashStr, mulberry32, pick } from './rng'
+import { GRADUATION_QUOTE } from '../../server/launchlab-curve.mjs'
 
 export type CoinStatus = 'open' | 'upcoming' | 'curve' | 'graduated' | 'refunding'
 export type Grade = 'A+' | 'A' | 'B' | 'C' | 'D' | 'N/A'
@@ -30,7 +31,9 @@ export interface Coin {
   tags: string[]
 }
 export const SUPPLY = 1_000_000_000
-export const GRADUATE_SOL = 85 // assumption: LaunchLab default graduation threshold (see HANDOFF)
+// Standard Raydium LaunchLab curve: migration once 85 SOL (net) is raised. Live coins carry the pool's own target.
+export const GRADUATE_SOL = Number(GRADUATION_QUOTE) / 1e9
+export const graduationOf = (c: { graduationTarget?: number }) => c.graduationTarget || GRADUATE_SOL
 export const FEES = { total: 1, raydium: 0.25, creator: 0.25, platform: 0.5 }
 
 export const maxRaise = (c: Pick<Coin, 'priceCeiling' | 'windowTokens'>) => c.priceCeiling * c.windowTokens

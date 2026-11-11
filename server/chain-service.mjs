@@ -1,6 +1,7 @@
 import {migratedPool,cpmmQuote,cpmmIxs} from './cpmm-trade.mjs';
 import {decodePool,tradeQuote,tradeIxs} from './launchlab-trade.mjs';
 import {Buffer} from 'buffer';
+import {MAX_FIRST_BUY,MIN_FIRST_BUY} from './launchlab-curve.mjs';
 import {Transaction,ComputeBudgetProgram} from '@solana/web3.js';
 import {requireThat} from './errors.mjs';
 import {hash} from './crypto.mjs';
@@ -18,10 +19,10 @@ export async function prepareChain(env,db,owner,wallet,b,now=Date.now()){
   const v=b.params||{},start=integer(v.start,'start');requireThat(start>=BigInt(Math.floor(now/1000))&&start<=BigInt(Math.floor(now/1000)+86400),'TIME','Choose a start within the next 24 hours.');
   requireThat(typeof v.name==='string'&&Buffer.byteLength(v.name)>=2&&Buffer.byteLength(v.name)<=32&&typeof v.symbol==='string'&&/^[A-Za-z0-9]{2,10}$/.test(v.symbol),'METADATA','Invalid token name or symbol.');
   let uri;try{uri=new URL(v.uri)}catch{}requireThat(uri?.protocol==='https:'&&!uri.username&&!uri.password&&Buffer.byteLength(v.uri)<=200,'METADATA','Use an HTTPS metadata URI of at most 200 bytes.');
-  const p={...v,start,end:start+600n};for(const n of ['nonce','minTarget','maxRaise','windowTokens','creatorTokens','bond'])p[n]=integer(v[n],n);
-  requireThat(p.maxRaise>=10_000_000_000n&&p.maxRaise<=2_000_000_000_000n&&p.minTarget>=p.maxRaise/10n&&p.minTarget<=p.maxRaise,'RAISE','Invalid raise limits.');requireThat([200_000_000_000_000n,300_000_000_000_000n,400_000_000_000_000n].includes(p.windowTokens)&&p.creatorTokens<=50_000_000_000_000n,'ALLOCATION','Invalid token allocations.');requireThat(p.bond>=1_000_000_000n&&p.bond<=50_000_000_000n&&Number.isInteger(p.lockDays)&&p.lockDays>=30&&p.lockDays<=180,'BOND','Invalid bond or lock.');
+  const p={...v,start,end:start+600n};for(const n of ['nonce','minTarget','maxRaise','creatorBuy','creatorTokens','bond'])p[n]=integer(v[n]??'0',n);
+  requireThat(p.maxRaise+p.creatorBuy>=MIN_FIRST_BUY&&p.maxRaise+p.creatorBuy<=MAX_FIRST_BUY&&p.minTarget>=p.maxRaise/10n&&p.minTarget<=p.maxRaise,'RAISE','Invalid raise limits.');requireThat(p.creatorTokens<=50_000_000_000_000n,'ALLOCATION','Invalid token allocations.');requireThat(p.bond>=1_000_000_000n&&p.bond<=50_000_000_000n&&Number.isInteger(p.lockDays)&&p.lockDays>=30&&p.lockDays<=180,'BOND','Invalid bond or lock.');
   requireThat(typeof p.walletAge==='boolean'&&typeof p.history==='boolean','POLICY','Eligibility settings must be booleans.');
-  const c=await createIx(wallet,config.platform,config.treasury,p,config.program);ixs=[c.instruction];expected={window:c.addresses.window.toBase58(),mint:c.addresses.mint.toBase58(),creatorReserveLamports:'100000000',creationFeeLamports:'20000000'};
+  const c=await createIx(wallet,config.platform,config.treasury,p,config.program);ixs=[c.instruction];expected={window:c.addresses.window.toBase58(),mint:c.addresses.mint.toBase58(),creatorReserveLamports:'100000000',creationFeeLamports:'20000000',creatorBuyLamports:String(p.creatorBuy)};
  }else{
   const w=await fetchWindow(rpc,b.window,config.program);expected={window:b.window,mint:w.mint.toBase58()};
   if(b.action==='pledge'){

@@ -4,7 +4,7 @@ import {allocation,curveQuote,LAMPORTS as L,UNITS as U} from '../server/math.mjs
 import {seedState,command,connect,audit,tick,settleCoin,truthFor,scoutRows,creator} from '../server/engine.mjs';
 const NOW=1794025800000;
 const templates=[{id:'mochi',ticker:'MOCHI',name:'Mochi',hue:200,accessory:'bow',creator:'example',tags:[],priceCeiling:1e-7,windowTokens:300e6,minTarget:3}];
-const form={name:'Test Floof',ticker:'TEST',desc:'A test coin',hue:200,acc:'bow',alloc:30,startIn:10,ceiling:'0.0000001',minTarget:'3',bond:5,creatorPct:2,vest:90};
+const form={name:'Test Floof',ticker:'TEST',desc:'A test coin',hue:200,acc:'bow',startIn:10,maxRaise:'30',minTarget:'3',bond:5,creatorPct:2,vest:90};
 function seed(){return seedState(templates,NOW)}
 function addPledge(s,id,amount,at=NOW){connect(s,id,at);const att=command(s,id,'attest',{coin:'mochi'},at);return command(s,id,'pledge',{coin:'mochi',amount,attestation:att.id},at)}
 function readyMarket(){const s=seed();for(let i=0;i<12;i++)addPledge(s,'u'+i,0.3);s.coins.mochi.windowEnd=NOW+1;tick(s,NOW+2);command(s,'u0','claim',{id:'window:mochi'},NOW+3);return s}

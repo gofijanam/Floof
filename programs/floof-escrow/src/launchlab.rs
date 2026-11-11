@@ -8,7 +8,10 @@ pub const LAUNCHLAB:Pubkey=pubkey!("DRay6fNdQ5J82H7xV6uq2aV3mNrUZ1J4PgSKsWgptcm6
 pub const WSOL:Pubkey=pubkey!("So11111111111111111111111111111111111111112");
 pub const METADATA:Pubkey=pubkey!("metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s");
 pub const GLOBAL:Pubkey=pubkey!("7ZR4zD7PYfY2XxoG1Gxcy2EgEeGYrpxrwzPuwdUBssEt");
-pub const SELL:u64=800_000_000_000_000;
+/// Standard Raydium LaunchLab curve (SDK `createLaunchpad` defaults, pinned SDK 0.2.84-alpha):
+/// 1B supply (6 dp), 793.1M sold on the curve, migrates to CPMM once 85 SOL (net of fees) is raised.
+pub const SELL:u64=793_100_000_000_000;
+pub const GRADUATION_QUOTE:u64=85_000_000_000;
 pub const RESERVE:u64=100_000_000;
 pub const CREATE_FEE:u64=20_000_000;
 pub fn pda(seeds:&[&[u8]])->Pubkey{Pubkey::find_program_address(seeds,&LAUNCHLAB).0}
@@ -30,7 +33,8 @@ fn raw_cpi<'info>(program:AccountInfo<'info>,accounts:Vec<(AccountInfo<'info>,bo
 }
 fn string(data:&mut Vec<u8>,s:&str){data.extend_from_slice(&(s.len()as u32).to_le_bytes());data.extend_from_slice(s.as_bytes());}
 pub fn initialize_data(w:&Window,target:u64)->Vec<u8>{let mut d=vec![67,153,175,39,218,16,38,32,6];string(&mut d,&w.name);string(&mut d,&w.symbol);string(&mut d,&w.uri);d.push(0);for n in [SUPPLY,SELL,target]{d.extend_from_slice(&n.to_le_bytes())}d.push(1);for n in [w.creator_tokens,0,if w.creator_tokens>0{1}else{0}]{d.extend_from_slice(&n.to_le_bytes())}d.push(0);d}
-pub fn buy_data(amount:u64,budget:u64)->Vec<u8>{let mut d=vec![24,211,116,40,105,3,153,56];for n in [amount,budget,0]{d.extend_from_slice(&n.to_le_bytes())}d}
+/// LaunchLab `buy_exact_in(amount_in, minimum_amount_out, share_fee_rate)`.
+pub fn buy_data(amount_in:u64,min_out:u64)->Vec<u8>{let mut d=vec![250,234,13,123,213,156,19,236];for n in [amount_in,min_out,0]{d.extend_from_slice(&n.to_le_bytes())}d}
 #[derive(Accounts)]pub struct SettleLaunch<'info>{
  #[account(mut,seeds=[b"window",window.mint.as_ref()],bump=window.bump)]pub window:Box<Account<'info,Window>>,
  /// CHECK: reserved mint PDA, initialized by the verified LaunchLab CPI only.
@@ -57,6 +61,10 @@ pub fn buy_data(amount:u64,budget:u64)->Vec<u8>{let mut d=vec![24,211,116,40,105
  #[account(mut,address=associated_token::get_associated_token_address(&launcher.key(),&window.mint))]pub buyer_base:UncheckedAccount<'info>,
  /// CHECK: canonical temporary WSOL ATA, initialized with reserve, never pledge rent.
  #[account(mut,address=associated_token::get_associated_token_address(&launcher.key(),&WSOL))]pub buyer_quote:UncheckedAccount<'info>,
+ /// CHECK: immutable creator; receives the creator-buy tokens and any unspent creator quote.
+ #[account(mut,address=window.creator)]pub creator:UncheckedAccount<'info>,
+ /// CHECK: canonical creator ATA, initialized after the mint exists.
+ #[account(mut,address=associated_token::get_associated_token_address(&window.creator,&window.mint))]pub creator_base:UncheckedAccount<'info>,
  /// CHECK: canonical claim ATA, initialized after the mint exists.
  #[account(mut,address=associated_token::get_associated_token_address(&window.key(),&window.mint))]pub claim_vault:UncheckedAccount<'info>,
  /// CHECK: native vesting beneficiary is Window; creator must pass Floof lock too.
@@ -73,16 +81,19 @@ pub fn buy_data(amount:u64,budget:u64)->Vec<u8>{let mut d=vec![24,211,116,40,105
 }
 fn token_amount(a:&AccountInfo)->Result<u64>{require_keys_eq!(*a.owner,token::ID,ErrCode::Owner);u64_at(&a.try_borrow_data()?,64)}
 fn ata<'info>(payer:AccountInfo<'info>,account:AccountInfo<'info>,authority:AccountInfo<'info>,mint:AccountInfo<'info>,token:AccountInfo<'info>,system:AccountInfo<'info>,associated:AccountInfo<'info>,seeds:&[&[&[u8]]])->Result<()>{associated_token::create_idempotent(CpiContext::new_with_signer(associated,associated_token::Create{payer,associated_token:account,authority,mint,system_program:system,token_program:token},seeds))}
-pub fn settle(ctx:Context<SettleLaunch>,target:u64)->Result<()>{
+pub fn settle(ctx:Context<SettleLaunch>)->Result<()>{
  let a=&ctx.accounts;let now=Clock::get()?.unix_timestamp;require!(a.window.state==OPEN&&now>=a.window.end&&a.window.pledged>=a.window.min_target,ErrCode::Time);
  require!(a.pool.data_is_empty()&&a.mint.data_is_empty(),ErrCode::State);
- let budget=a.window.pledged.min(a.window.max_raise);require!(target>budget&&target<=MAX_RAISE*100,ErrCode::Amount);
+ // First buy = filled presale + creator buy, on the unchanged standard curve.
+ let pledge_budget=a.window.pledged.min(a.window.max_raise);let creator_buy=a.window.creator_buy;
+ let budget=pledge_budget.checked_add(creator_buy).ok_or(ErrCode::Overflow)?;require!(budget>=MIN_FIRST_BUY&&budget<=MAX_FIRST_BUY,ErrCode::RaiseCap);
  let (g,p)=configuration(&a.global,&a.platform,&a.window.fee_owner)?;require!(g==a.window.global_hash&&p==a.window.platform_hash,ErrCode::Config);
  let wk=a.window.key();let lb=[a.window.launcher_bump];let launcher_seeds:&[&[u8]]=&[b"launcher",wk.as_ref(),&lb];let mb=[a.window.mint_bump];let nonce=a.window.nonce.to_le_bytes();let mint_seeds:&[&[u8]]=&[b"mint",a.window.creator.as_ref(),&nonce,&mb];let signers=&[launcher_seeds,mint_seeds];
  raw_cpi(a.launchlab.to_account_info(),vec![
  (a.launcher.to_account_info(),true,true),(a.launcher.to_account_info(),false,false),(a.global.to_account_info(),false,false),(a.platform.to_account_info(),false,false),(a.authority.to_account_info(),false,false),(a.pool.to_account_info(),true,false),(a.mint.to_account_info(),true,true),(a.quote_mint.to_account_info(),false,false),(a.base_vault.to_account_info(),true,false),(a.quote_vault.to_account_info(),true,false),(a.metadata.to_account_info(),true,false),(a.token_program.to_account_info(),false,false),(a.token_program.to_account_info(),false,false),(a.metadata_program.to_account_info(),false,false),(a.system_program.to_account_info(),false,false),(a.rent.to_account_info(),false,false),(a.event_authority.to_account_info(),false,false),(a.launchlab.to_account_info(),false,false)
- ],initialize_data(&a.window,target),signers)?;
+ ],initialize_data(&a.window,GRADUATION_QUOTE),signers)?;
  for (account,owner,mint) in [(a.buyer_base.to_account_info(),a.launcher.to_account_info(),a.mint.to_account_info()),(a.buyer_quote.to_account_info(),a.launcher.to_account_info(),a.quote_mint.to_account_info()),(a.claim_vault.to_account_info(),a.window.to_account_info(),a.mint.to_account_info())]{ata(a.launcher.to_account_info(),account,owner,mint,a.token_program.to_account_info(),a.system_program.to_account_info(),a.associated_token_program.to_account_info(),&[launcher_seeds])?;}
+ if creator_buy>0{ata(a.launcher.to_account_info(),a.creator_base.to_account_info(),a.creator.to_account_info(),a.mint.to_account_info(),a.token_program.to_account_info(),a.system_program.to_account_info(),a.associated_token_program.to_account_info(),&[launcher_seeds])?;}
  let before_base=token_amount(&a.buyer_base)?;let before_quote=token_amount(&a.buyer_quote)?;
  // Move principal through the system-owned launcher, then wrap it. Include the
  // source window in the CPI so both direct balance deltas synchronize together.
@@ -93,16 +104,22 @@ pub fn settle(ctx:Context<SettleLaunch>,target:u64)->Result<()>{
  token::sync_native(CpiContext::new(a.token_program.to_account_info(),token::SyncNative{account:a.buyer_quote.to_account_info()}))?;
  raw_cpi(a.launchlab.to_account_info(),vec![
  (a.launcher.to_account_info(),true,true),(a.authority.to_account_info(),false,false),(a.global.to_account_info(),false,false),(a.platform.to_account_info(),false,false),(a.pool.to_account_info(),true,false),(a.buyer_base.to_account_info(),true,false),(a.buyer_quote.to_account_info(),true,false),(a.base_vault.to_account_info(),true,false),(a.quote_vault.to_account_info(),true,false),(a.mint.to_account_info(),false,false),(a.quote_mint.to_account_info(),false,false),(a.token_program.to_account_info(),false,false),(a.token_program.to_account_info(),false,false),(a.event_authority.to_account_info(),false,false),(a.launchlab.to_account_info(),false,false),(a.system_program.to_account_info(),false,false),(a.platform_fee_vault.to_account_info(),true,false),(a.creator_fee_vault.to_account_info(),true,false)
- ],buy_data(a.window.window_tokens,budget),&[launcher_seeds])?;
+ ],buy_data(budget,1),&[launcher_seeds])?;
  let bought=token_amount(&a.buyer_base)?.checked_sub(before_base).ok_or(ErrCode::Amount)?;let spent=before_quote.checked_add(budget).ok_or(ErrCode::Overflow)?.checked_sub(token_amount(&a.buyer_quote)?).ok_or(ErrCode::Amount)?;
- require!(bought==a.window.window_tokens&&spent<=budget&&spent>=budget.saturating_sub(1000),ErrCode::Amount);
- token::transfer(CpiContext::new_with_signer(a.token_program.to_account_info(),Transfer{from:a.buyer_base.to_account_info(),to:a.claim_vault.to_account_info(),authority:a.launcher.to_account_info()},&[launcher_seeds]),bought)?;
+ let pool=a.pool.try_borrow_data()?;require!(pool.len()==429&&pool[..8]==[247,237,227,245,215,195,222,70],ErrCode::State);let status=pool[17];require_keys_eq!(key_at(&pool,205)?,a.window.mint,ErrCode::Config);require_keys_eq!(key_at(&pool,333)?,a.launcher.key(),ErrCode::Config);require!(u64_at(&pool,53)?==bought&&u64_at(&pool,69)?==GRADUATION_QUOTE,ErrCode::Amount);drop(pool);
+ // On a trading curve exact-in spends the whole budget. Only a first buy that completes the
+ // curve (status != 0, migration pending) may leave quote unspent; that quote is refunded below.
+ require!(bought>0&&spent<=budget&&(spent==budget||status!=0),ErrCode::Amount);
+ let (creator_spent,creator_tokens)=split_first_buy(budget,creator_buy,spent,bought)?;let window_tokens=bought-creator_tokens;let pledge_spent=spent-creator_spent;
+ if creator_tokens>0{token::transfer(CpiContext::new_with_signer(a.token_program.to_account_info(),Transfer{from:a.buyer_base.to_account_info(),to:a.creator_base.to_account_info(),authority:a.launcher.to_account_info()},&[launcher_seeds]),creator_tokens)?;}
+ if window_tokens>0{token::transfer(CpiContext::new_with_signer(a.token_program.to_account_info(),Transfer{from:a.buyer_base.to_account_info(),to:a.claim_vault.to_account_info(),authority:a.launcher.to_account_info()},&[launcher_seeds]),window_tokens)?;}
  token::close_account(CpiContext::new_with_signer(a.token_program.to_account_info(),CloseAccount{account:a.buyer_quote.to_account_info(),destination:a.launcher.to_account_info(),authority:a.launcher.to_account_info()},&[launcher_seeds]))?;
- anchor_lang::system_program::transfer(CpiContext::new_with_signer(a.system_program.to_account_info(),anchor_lang::system_program::Transfer{from:a.launcher.to_account_info(),to:a.window.to_account_info()},&[launcher_seeds]),budget-spent)?;
+ if budget>spent{anchor_lang::system_program::transfer(CpiContext::new_with_signer(a.system_program.to_account_info(),anchor_lang::system_program::Transfer{from:a.launcher.to_account_info(),to:a.window.to_account_info()},&[launcher_seeds]),budget-spent)?;}
+ let creator_refund=creator_buy-creator_spent;if creator_refund>0{move_lamports(&a.window.to_account_info(),&a.creator.to_account_info(),creator_refund)?;}
  if a.window.creator_tokens>0{let mut d=vec![129,178,2,13,217,172,230,218];d.extend_from_slice(&a.window.creator_tokens.to_le_bytes());raw_cpi(a.launchlab.to_account_info(),vec![(a.launcher.to_account_info(),true,true),(a.window.to_account_info(),true,false),(a.pool.to_account_info(),true,false),(a.vesting_record.to_account_info(),true,false),(a.system_program.to_account_info(),false,false)],d,&[launcher_seeds])?;}
- let pool=a.pool.try_borrow_data()?;require!(pool.len()==429&&pool[..8]==[247,237,227,245,215,195,222,70]&&pool[17]==0,ErrCode::State);require_keys_eq!(key_at(&pool,205)?,a.window.mint,ErrCode::Config);require_keys_eq!(key_at(&pool,333)?,a.launcher.key(),ErrCode::Config);require!(u64_at(&pool,53)?==bought,ErrCode::Amount);drop(pool);
- let w=&mut ctx.accounts.window;w.raised=spent;w.state=LIVE;w.pool=ctx.accounts.pool.key();w.fundraising_target=target;emit!(WindowSettled{window:w.key(),state:w.state,raised:spent});Ok(())
+ let w=&mut ctx.accounts.window;w.raised=pledge_spent;w.window_tokens=window_tokens;w.creator_buy_tokens=creator_tokens;w.state=LIVE;w.pool=ctx.accounts.pool.key();w.fundraising_target=GRADUATION_QUOTE;emit!(WindowSettled{window:w.key(),state:w.state,raised:pledge_spent});emit!(FirstBuy{window:w.key(),spent,bought,creator_spent,creator_tokens,migration_pending:status!=0});Ok(())
 }
+#[event]pub struct FirstBuy{pub window:Pubkey,pub spent:u64,pub bought:u64,pub creator_spent:u64,pub creator_tokens:u64,pub migration_pending:bool}
 #[derive(Accounts)]pub struct ClaimReserve<'info>{
  #[account(seeds=[b"window",window.mint.as_ref()],bump=window.bump,has_one=creator)]pub window:Account<'info,Window>,#[account(mut)]pub creator:Signer<'info>,
  #[account(mut,seeds=[b"launcher",window.key().as_ref()],bump=window.launcher_bump)]pub launcher:SystemAccount<'info>,pub system_program:Program<'info,System>

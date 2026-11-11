@@ -2,7 +2,7 @@ import { motion } from 'framer-motion'
 import { Link } from 'react-router-dom'
 import { memo, forwardRef } from 'react'
 import type { Coin } from '../lib/mock'
-import { creatorBy, GRADUATE_SOL, SUPPLY, walletCap } from '../lib/mock'
+import { creatorBy, graduationOf, SUPPLY, walletCap } from '../lib/mock'
 import { fmtPrice, fmtUsd, hms, SOL_USD } from '../lib/format'
 import { CoinAvatar } from './CoinAvatar'
 import { Countdown, GradeBadge, LiveDot, MiniMeter, cx } from './ui'
@@ -63,10 +63,10 @@ export const CoinCard = memo(forwardRef<HTMLDivElement, { coin: Coin }>(function
                 <div className="text-right"><div className="label">24h</div><div className={cx('font-num text-sm font-semibold tnum', c.change24h >= 0 ? 'text-mint' : 'text-danger')}>{c.change24h >= 0 ? '+' : ''}{c.change24h.toFixed(1)}%</div></div>
               </div>
               <div className="mt-3 h-2 overflow-hidden rounded-full bg-night/80 ring-1 ring-lav/10">
-                <div className="h-full rounded-full" style={{ width: `${(c.curveSol / GRADUATE_SOL) * 100}%`, background: c.status === 'graduated' ? 'linear-gradient(90deg,#7CF5C8,#5FD4FF)' : 'linear-gradient(90deg,#B69CFF,#FF5FB8)' }} />
+                <div className="h-full rounded-full" style={{ width: `${(c.curveSol / graduationOf(c)) * 100}%`, background: c.status === 'graduated' ? 'linear-gradient(90deg,#7CF5C8,#5FD4FF)' : 'linear-gradient(90deg,#B69CFF,#FF5FB8)' }} />
               </div>
               <div className="mt-1.5 flex justify-between text-[11px] font-bold text-lav/70 tnum">
-                <span>{c.status === 'graduated' ? 'Graduated → Raydium CPMM' : `LaunchLab curve ${((c.curveSol / GRADUATE_SOL) * 100).toFixed(0)}%`}</span>
+                <span>{c.status === 'graduated' ? 'Graduated → Raydium CPMM' : `LaunchLab curve ${((c.curveSol / graduationOf(c)) * 100).toFixed(0)}%`}</span>
                 <span>{c.snipersBlocked} snipers blocked</span>
               </div>
             </>

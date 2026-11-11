@@ -8,7 +8,7 @@ import { Card, GradeBadge, LiveDot, Tabs, cx, gradeColor } from '../components/u
 import { CreatorCard } from '../components/CreatorCard'
 import { IBack, ICopy, IGear, ISwap, IShield, IArrow } from '../components/icons'
 import { connectWallet, toast, trade, useCoin, useStore } from '../lib/store'
-import { GRADUATE_SOL, SUPPLY, FEES } from '../lib/mock'
+import { graduationOf, SUPPLY, FEES } from '../lib/mock'
 import { ago, fmtCompact, fmtPrice, fmtUsd, short, SOL_USD } from '../lib/format'
 import { sfx } from '../lib/audio'
 
@@ -124,11 +124,11 @@ export default function Trade() {
         <div className="space-y-4 lg:sticky lg:top-24 lg:self-start">
           <TradePanel id={c.id} />
           <Card className="p-4">
-            <div className="flex items-center justify-between"><div className="label">bonding curve</div><span className="font-num text-xs font-semibold text-lav tnum">{c.curveSol.toFixed(1)} / {c.graduationTarget || GRADUATE_SOL} SOL</span></div>
+            <div className="flex items-center justify-between"><div className="label">bonding curve</div><span className="font-num text-xs font-semibold text-lav tnum">{c.curveSol.toFixed(1)} / {graduationOf(c)} SOL</span></div>
             <div className="relative mt-3 h-3 overflow-hidden rounded-full bg-night ring-1 ring-lav/10">
-              <motion.div className="absolute inset-y-0 left-0 rounded-full anim-gradient" style={{ backgroundImage: grad ? 'linear-gradient(90deg,#7CF5C8,#5FD4FF,#7CF5C8)' : 'linear-gradient(90deg,#B69CFF,#FF5FB8,#B69CFF)' }} animate={{ width: `${(c.curveSol / (c.graduationTarget || GRADUATE_SOL)) * 100}%` }} />
+              <motion.div className="absolute inset-y-0 left-0 rounded-full anim-gradient" style={{ backgroundImage: grad ? 'linear-gradient(90deg,#7CF5C8,#5FD4FF,#7CF5C8)' : 'linear-gradient(90deg,#B69CFF,#FF5FB8,#B69CFF)' }} animate={{ width: `${(c.curveSol / (graduationOf(c))) * 100}%` }} />
             </div>
-            <div className="mt-2 text-xs font-bold text-lav">{grad ? (devnet?'Graduated to Raydium CPMM on Devnet.':'Graduated — sandbox pool target reached.') : <>When the curve reaches {c.graduationTarget || GRADUATE_SOL} SOL, the intended Devnet flow migrates to <span className="text-cream">Raydium CPMM</span>. {devnet?'Migration is completed by Raydium’s authorized migrator.':'This sandbox does not migrate on-chain.'} {Math.max(0,(c.graduationTarget || GRADUATE_SOL) - c.curveSol).toFixed(1)} SOL to go.</>}</div>
+            <div className="mt-2 text-xs font-bold text-lav">{grad ? (devnet?'Graduated to Raydium CPMM on Devnet.':'Graduated — sandbox pool target reached.') : <>When the curve reaches {graduationOf(c)} SOL, the intended Devnet flow migrates to <span className="text-cream">Raydium CPMM</span>. {devnet?'Migration is completed by Raydium’s authorized migrator.':'This sandbox does not migrate on-chain.'} {Math.max(0,(graduationOf(c)) - c.curveSol).toFixed(1)} SOL to go.</>}</div>
           </Card>
           <Card className="p-4">
             <div className="flex items-center justify-between"><div className="flex items-center gap-2 font-extrabold"><IShield s={16} className="text-mint" /> TRUTH</div><Link to={`/truth/${c.ca}`} className="text-xs font-extrabold text-blue hover:underline">Full report →</Link></div>

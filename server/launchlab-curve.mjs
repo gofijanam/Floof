@@ -1,20 +1,47 @@
-// Integer arithmetic for the pinned Raydium constant-product, classic SPL-token path.
-// Keep parity tests against the pinned SDK; never reuse these parameters for other configs.
-export const SUPPLY=1_000_000_000_000_000n, SELL=800_000_000_000_000n;
+// Integer math for the STANDARD Raydium LaunchLab constant-product curve used by Floof.
+// Same parameters the escrow program pins (programs/floof-escrow/src/launchlab.rs) and the
+// Raydium SDK's createLaunchpad defaults: 1B supply (6 dp), 793.1M sold on the curve,
+// migration to CPMM once 85 SOL (net of fees) has been raised. No custom curve is solved.
+// Parity with the SDK (getInitParam / buyExactIn) is enforced by tests/launchlab.test.mjs.
+export const SUPPLY=1_000_000_000_000_000n, SELL=793_100_000_000_000n, GRADUATION_QUOTE=85_000_000_000n, MIGRATE_FEE=0n;
+// Pinned fee rates (per 1e6): LaunchLab global trade fee 0.25% + Floof platform 0.5% + creator 0.25%.
+export const FEES={protocol:2500n,platform:5000n,creator:2500n},FEE_RATE=FEES.protocol+FEES.platform+FEES.creator,FEE_DENOMINATOR=1_000_000n;
+// Configurable cap on raise + creator buy. Must match MAX_FIRST_BUY in the program.
+export const MAX_FIRST_BUY=86_000_000_000n, MIN_FIRST_BUY=10_000_000n;
 const ceil=(a,b)=>(a+b-1n)/b;
-export function initialQuote(target,windowTokens,locked=0n){
- target=BigInt(target);windowTokens=BigInt(windowTokens);locked=BigInt(locked);
- if(target<=0n||locked<0n||locked>SUPPLY/20n||![SUPPLY/5n,SUPPLY*3n/10n,SUPPLY*2n/5n].includes(windowTokens))throw Error('Invalid Floof curve parameters');
- const remaining=SUPPLY-SELL-locked,denominator=target*SELL/remaining-target;
- if(denominator<=0n)throw Error('Invalid curve denominator');
- const virtualBase=(target*SELL*SELL/remaining)/denominator,virtualQuote=target*target/denominator;
- const net=ceil(virtualQuote*windowTokens,virtualBase-windowTokens);
- const gross=ceil(net*1_000_000n,990_000n);
- return {target,virtualBase,virtualQuote,net,gross};
+/** Virtual reserves for the standard curve (SDK LaunchConstantProductCurve.getInitParam). */
+export function standardCurve({locked=0n,supply=SUPPLY,totalSell=SELL,target=GRADUATION_QUOTE,migrateFee=MIGRATE_FEE}={}){
+ locked=BigInt(locked);if(locked<0n||locked>supply/20n)throw Error('Invalid locked creator allocation');
+ const remaining=supply-totalSell-locked,net=target-migrateFee;if(remaining<=0n||net<=0n)throw Error('Invalid curve parameters');
+ const denominator=net*totalSell/remaining-target;if(denominator<=0n)throw Error('Invalid curve denominator');
+ return {supply,totalSell,target,locked,virtualBase:(net*totalSell*totalSell/remaining)/denominator,virtualQuote:target*target/denominator,realBase:0n,realQuote:0n};
 }
-export function settlementTarget(budget,windowTokens,locked=0n){
- budget=BigInt(budget);if(budget<1_000_000_000n||budget>2_000_000_000_000n)throw Error('Invalid settlement budget');
- let lo=budget+1n,hi=200_000_000_000_000n;
- while(lo<hi){const m=(lo+hi+1n)/2n;if(initialQuote(m,windowTokens,locked).gross<=budget)lo=m;else hi=m-1n}
- const q=initialQuote(lo,windowTokens,locked);if(q.gross>budget||budget-q.gross>1000n)throw Error('No safe curve target fits the escrow budget');return q;
+/** LaunchLab buy_exact_in on a curve state: fee taken from input; capped at the remaining curve supply. */
+export function buyExactIn(curve,amountIn,feeRate=FEE_RATE){
+ amountIn=BigInt(amountIn);if(amountIn<0n)throw Error('Invalid amount');if(amountIn===0n)return {spent:0n,tokens:0n,fee:0n,net:0n,completes:false};
+ const x=curve.virtualBase-curve.realBase,y=curve.virtualQuote+curve.realQuote,remaining=curve.totalSell-curve.realBase;
+ let fee=ceil(amountIn*feeRate,FEE_DENOMINATOR),net=amountIn-fee,tokens=net*x/(y+net),spent=amountIn,completes=false;
+ if(tokens>remaining){net=ceil(y*remaining,x-remaining);spent=ceil(net*FEE_DENOMINATOR,FEE_DENOMINATOR-feeRate);fee=spent-net;tokens=remaining;completes=true}
+ return {spent,tokens,fee,net,completes};
+}
+/** Gross SOL (incl. fees) a single first buy needs to complete the curve and trigger migration. */
+export function curveCapacity(opts={}){const c=standardCurve(opts);return buyExactIn(c,c.target*10n).spent}
+/** The same split as split_first_buy() in the program: one average price for presale and creator buy. */
+export function splitFirstBuy(budget,creatorBuy,spent,tokens){budget=BigInt(budget);creatorBuy=BigInt(creatorBuy);if(creatorBuy===0n||spent===0n)return {creatorSpent:0n,creatorTokens:0n};const creatorSpent=spent*creatorBuy/budget;return {creatorSpent,creatorTokens:tokens*creatorSpent/spent}}
+/**
+ * Live Create-page quote for a fair-window first buy on the standard curve.
+ * raise/creatorBuy in lamports. Returns bigint lamports/base units plus display numbers.
+ */
+export function firstBuyQuote({raise=0n,creatorBuy=0n,locked=0n}={}){
+ raise=BigInt(raise);creatorBuy=BigInt(creatorBuy);if(raise<0n||creatorBuy<0n)throw Error('Invalid amount');
+ const curve=standardCurve({locked}),budget=raise+creatorBuy,buy=buyExactIn(curve,budget);
+ const {creatorSpent,creatorTokens}=splitFirstBuy(budget||1n,creatorBuy,buy.spent,buy.tokens);
+ const after={...curve,realBase:buy.tokens,realQuote:buy.net},startPrice=Number(curve.virtualQuote)/Number(curve.virtualBase)/1000;
+ const spotAfter=(Number(after.virtualQuote+after.realQuote)/Number(after.virtualBase-after.realBase))/1000; // SOL per whole token
+ const avgPrice=buy.tokens>0n?Number(buy.spent)/1e9/(Number(buy.tokens)/1e6):startPrice;
+ const remainingNet=curve.target>after.realQuote?curve.target-after.realQuote:0n;
+ return {budget,spent:buy.spent,fee:buy.fee,tokens:buy.tokens,completes:buy.completes,unspent:budget-buy.spent,creatorSpent,creatorTokens,windowTokens:buy.tokens-creatorTokens,pledgeSpent:buy.spent-creatorSpent,
+  pctOfSupply:Number(buy.tokens)/Number(curve.supply)*100,pctOfCurve:Number(buy.tokens)/Number(curve.totalSell)*100,avgPrice,startPrice,spotAfter,
+  impliedMcapSol:avgPrice*Number(curve.supply)/1e6,mcapAfterSol:spotAfter*Number(curve.supply)/1e6,curveSolAfter:Number(after.realQuote)/1e9,
+  remainingToMigrateSol:Number(remainingNet)/1e9,remainingToMigrateGrossSol:Number(ceil(remainingNet*FEE_DENOMINATOR,FEE_DENOMINATOR-FEE_RATE))/1e9,graduationSol:Number(curve.target)/1e9,capacitySol:Number(curveCapacity({locked}))/1e9};
 }

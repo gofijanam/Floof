@@ -13,7 +13,7 @@ const save=()=>fs.writeFileSync(file,JSON.stringify(r,null,2));
 const send=async(name,ixs,payer=admin)=>{const sig=await sendOnce(c,payer,ixs,`e2e-${name}`);r.transactions[name]=sig;save();return sig};
 const get=async address=>decodeWindow((await c.getAccountInfo(address,'finalized')).data);
 const config=(await c.getAccountInfo(pda(['config']),'finalized')).data;const {PublicKey}=await import('@solana/web3.js');const platform=new PublicKey(config.subarray(40,72));
-if(!r.params){const slot=await c.getSlot(),time=await c.getBlockTime(slot);r.params={nonce:String(Date.now()),name:'Floof Devnet QA',symbol:'FLQA',uri:'https://floof-fair-launch.gofivahootan.chatgpt.site/api/qa-metadata.json',walletAge:false,history:false,start:time+60,end:time+660,minTarget:'1000000000',maxRaise:'10000000000',windowTokens:'400000000000000',creatorTokens:'10000000000000',bond:'1000000000',lockDays:30};save();}
+if(!r.params){const slot=await c.getSlot(),time=await c.getBlockTime(slot);r.params={nonce:String(Date.now()),name:'Floof Devnet QA',symbol:'FLQA',uri:'https://floof-fair-launch.gofivahootan.chatgpt.site/api/qa-metadata.json',walletAge:false,history:false,start:time+60,end:time+660,minTarget:'1000000000',maxRaise:'10000000000',creatorBuy:'0',creatorTokens:'10000000000000',bond:'1000000000',lockDays:30};save();}
 const live=await createIx(admin.publicKey,platform,admin.publicKey,r.params),failed=await createIx(admin.publicKey,platform,admin.publicKey,{...r.params,nonce:String(BigInt(r.params.nonce)+1n),name:'Floof Refund QA',symbol:'FLRF'});
 r.window=live.addresses.window.toBase58();r.refundWindow=failed.addresses.window.toBase58();r.mint=live.addresses.mint.toBase58();save();
 if(process.argv.includes('--setup')){

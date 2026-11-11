@@ -1,5 +1,6 @@
 import {AppError,requireThat} from './errors.mjs';
 import {LAMPORTS as L,UNITS as U,SUPPLY,mulDiv,allocation,curveQuote,fixed} from './math.mjs';
+import {firstBuyQuote,MAX_FIRST_BUY,MIN_FIRST_BUY} from './launchlab-curve.mjs';
 const DAYS=86400000;
 export const blankTruth=()=>({grade:'N/A',score:0,realPct:0,sybilClusters:0,washPct:0,status:'insufficient_data',sampleSize:0,source:'sandbox',checks:[],clusters:{nodes:[],edges:[]}});
 export function seedState(templates,now=Date.now()){
@@ -22,12 +23,14 @@ export function validateCoin(f,now){
   requireThat(name.length>=2&&name.length<=32,'NAME','Name must be 2–32 characters.');
   requireThat(/^[A-Z0-9]{2,10}$/.test(ticker),'TICKER','Ticker must be 2–10 letters or digits.');
   requireThat(desc.length<=160,'DESCRIPTION','Description must be at most 160 characters.');
-  requireThat([20,30,40].includes(f.alloc),'ALLOCATION','Window allocation must be 20, 30 or 40%.');
   requireThat([10,30,60,180,1440].includes(f.startIn),'START','Choose an available start time.');
-  const windowUnits=mulDiv(SUPPLY,f.alloc,100),price=/^(?:0|[1-9]\d*)(?:\.\d{1,15})?$/.test(String(f.ceiling))?Number(f.ceiling):NaN,maxRaiseL=Math.round(price*(windowUnits/U)*L);
-  requireThat(Number.isFinite(price)&&Number.isSafeInteger(maxRaiseL)&&maxRaiseL>=10*L&&maxRaiseL<=2000*L,'CEILING','Maximum raise must be 10–2,000 SOL.');
-  const minTargetL=fixed(f.minTarget);
-  requireThat(minTargetL>=maxRaiseL/10&&minTargetL<=maxRaiseL,'TARGET','Minimum target must be 10–100% of the maximum raise.');
+  // The presale is the first buy on the standard LaunchLab curve (85 SOL graduation).
+  const solOrZero=v=>v===undefined||v===null||v===''||Number(v)===0?0:fixed(v),maxRaiseL=solOrZero(f.maxRaise),creatorBuyL=solOrZero(f.creatorBuy),firstBuyL=BigInt(maxRaiseL)+BigInt(creatorBuyL);
+  requireThat(firstBuyL>=MIN_FIRST_BUY&&firstBuyL<=MAX_FIRST_BUY,'RAISE',`Raise plus creator buy must be ${Number(MIN_FIRST_BUY)/L}–${Number(MAX_FIRST_BUY)/L} SOL.`);
+  requireThat(typeof f.creatorPct==='number'&&f.creatorPct>=0&&f.creatorPct<=5&&Number.isInteger(f.creatorPct*2),'CREATOR_ALLOCATION','Creator allocation must be 0–5%.');
+  const quote=firstBuyQuote({raise:BigInt(maxRaiseL),creatorBuy:BigInt(creatorBuyL),locked:BigInt(Math.round(SUPPLY*f.creatorPct/100))}),windowUnits=Number(quote.windowTokens),price=quote.avgPrice;
+  const minTargetL=solOrZero(f.minTarget);
+  requireThat((maxRaiseL===0?minTargetL===0:minTargetL>=maxRaiseL/10)&&minTargetL<=maxRaiseL,'TARGET','Minimum target must be 10–100% of the maximum raise.');
   requireThat(Number.isInteger(f.bond)&&f.bond>=1&&f.bond<=50,'BOND','Bond must be 1–50 SOL.');
   requireThat([30,60,90,120,150,180].includes(f.vest),'VESTING','Choose a 30–180 day lock.');
   requireThat(typeof f.creatorPct==='number'&&f.creatorPct>=0&&f.creatorPct<=5&&Number.isInteger(f.creatorPct*2),'CREATOR_ALLOCATION','Creator allocation must be 0–5%.');
@@ -41,7 +44,7 @@ export function validateCoin(f,now){
   const image=f.image||null;requireThat(!image||/^\/api\/images\/[a-f0-9]{64}\.(png|jpg|gif|webp)$/.test(image),'IMAGE','Upload the image before creating the coin.');
   requireThat(['none','bow','leaf','crown','star','boba','halo','sprout','cap','phones'].includes(f.acc??'none'),'ACCESSORY','Invalid mascot style.');
   requireThat(Number.isInteger(f.hue??200)&&(f.hue??200)>=0&&(f.hue??200)<=359,'COLOR','Invalid color.');
-  return {name,ticker,tagline:desc,hue:f.hue??200,accessory:f.acc??'none',priceCeiling:price,maxRaiseL,minTargetL,windowUnits,windowTokens:windowUnits/U,minTarget:minTargetL/L,bondL:f.bond*L,bondSol:f.bond,creatorUnits:Math.round(SUPPLY*f.creatorPct/100),creatorPct:f.creatorPct,lockDays:f.vest,windowStart:now+f.startIn*60000,windowEnd:now+(f.startIn+10)*60000,durationMs:600000,links,image,policy:{walletAge:!!f.walletAge,balHistory:!!f.balHistory}};
+  return {name,ticker,tagline:desc,hue:f.hue??200,accessory:f.acc??'none',priceCeiling:price,maxRaiseL,creatorBuyL,minTargetL,windowUnits,graduationTarget:quote.graduationSol,windowTokens:windowUnits/U,minTarget:minTargetL/L,bondL:f.bond*L,bondSol:f.bond,creatorUnits:Math.round(SUPPLY*f.creatorPct/100),creatorPct:f.creatorPct,lockDays:f.vest,windowStart:now+f.startIn*60000,windowEnd:now+(f.startIn+10)*60000,durationMs:600000,links,image,policy:{walletAge:!!f.walletAge,balHistory:!!f.balHistory}};
 }
 export function createCoin(s,id,f,now){
  const a=account(s,id),v=validateCoin(f,now);requireThat(!Object.values(s.coins).some(c=>c.ticker===v.ticker),'TICKER_EXISTS','This ticker is already taken.',409);

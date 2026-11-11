@@ -35,7 +35,7 @@ export async function recoverSettlement(tx,program,rpc){
  const window=keys[ix.accounts[0]],result=await rpc('getAccountInfo',[window,{encoding:'base64',commitment:'finalized',minContextSlot:tx.slot}]);
  requireThat(result?.context?.slot>=tx.slot&&result.value?.owner===program,'LOGS','Finalized settlement account evidence is unavailable.',409);
  const w=await decodeWindow(Buffer.from(result.value.data[0],'base64'));
- requireThat(pda(['window',w.mint],program).toBase58()===window&&w.mint.toBase58()===keys[ix.accounts[1]]&&w.pool.toBase58()===keys[ix.accounts[7]]&&w.state===1&&w.raised===(w.pledged<w.maxRaise?w.pledged:w.maxRaise),'LOGS','Settlement account does not match the successful instruction.',409);
+ requireThat(pda(['window',w.mint],program).toBase58()===window&&w.mint.toBase58()===keys[ix.accounts[1]]&&w.pool.toBase58()===keys[ix.accounts[7]]&&w.state===1&&w.raised<=(w.pledged<w.maxRaise?w.pledged:w.maxRaise),'LOGS','Settlement account does not match the successful instruction.',409);
  return [{logIndex:-1,kind:'WindowSettled',window,state:w.state,raised:String(w.raised),evidence:'finalized-account-recovery',accountSlot:result.context.slot}];
 }
 export async function ingestFinalized(db,signature,tx,program,now,rpc){
