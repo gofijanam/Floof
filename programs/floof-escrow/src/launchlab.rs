@@ -32,7 +32,7 @@ fn raw_cpi<'info>(program:AccountInfo<'info>,accounts:Vec<(AccountInfo<'info>,bo
  invoke_signed(&Instruction{program_id:LAUNCHLAB,accounts:metas,data},&infos,seeds).map_err(Into::into)
 }
 fn string(data:&mut Vec<u8>,s:&str){data.extend_from_slice(&(s.len()as u32).to_le_bytes());data.extend_from_slice(s.as_bytes());}
-pub fn initialize_data(w:&Window,target:u64)->Vec<u8>{let mut d=vec![67,153,175,39,218,16,38,32,6];string(&mut d,&w.name);string(&mut d,&w.symbol);string(&mut d,&w.uri);d.push(0);for n in [SUPPLY,SELL,target]{d.extend_from_slice(&n.to_le_bytes())}d.push(1);for n in [w.creator_tokens,0,if w.creator_tokens>0{1}else{0}]{d.extend_from_slice(&n.to_le_bytes())}d.push(0);d}
+pub fn initialize_data(w:&Window,target:u64)->Vec<u8>{let mut d=vec![67,153,175,39,218,16,38,32,6];string(&mut d,&w.name);string(&mut d,&w.symbol);string(&mut d,&w.uri);d.push(0);for n in [SUPPLY,SELL,target]{d.extend_from_slice(&n.to_le_bytes())}d.push(1);for n in [0u64,0,0]{d.extend_from_slice(&n.to_le_bytes())}d.push(0);d}
 /// LaunchLab `buy_exact_in(amount_in, minimum_amount_out, share_fee_rate)`.
 pub fn buy_data(amount_in:u64,min_out:u64)->Vec<u8>{let mut d=vec![250,234,13,123,213,156,19,236];for n in [amount_in,min_out,0]{d.extend_from_slice(&n.to_le_bytes())}d}
 #[derive(Accounts)]pub struct SettleLaunch<'info>{
@@ -67,8 +67,6 @@ pub fn buy_data(amount_in:u64,min_out:u64)->Vec<u8>{let mut d=vec![250,234,13,12
  #[account(mut,address=associated_token::get_associated_token_address(&window.creator,&window.mint))]pub creator_base:UncheckedAccount<'info>,
  /// CHECK: canonical claim ATA, initialized after the mint exists.
  #[account(mut,address=associated_token::get_associated_token_address(&window.key(),&window.mint))]pub claim_vault:UncheckedAccount<'info>,
- /// CHECK: native vesting beneficiary is Window; creator must pass Floof lock too.
- #[account(mut,address=pda(&[b"pool_vesting",pool.key().as_ref(),window.key().as_ref()]))]pub vesting_record:UncheckedAccount<'info>,
  /// CHECK: canonical platform fee vault.
  #[account(mut,address=pda(&[window.platform.as_ref(),WSOL.as_ref()]))]pub platform_fee_vault:UncheckedAccount<'info>,
  /// CHECK: canonical creator fee vault.
@@ -118,7 +116,6 @@ pub fn settle(ctx:Context<SettleLaunch>)->Result<()>{
  token::close_account(CpiContext::new_with_signer(a.token_program.to_account_info(),CloseAccount{account:a.buyer_quote.to_account_info(),destination:a.launcher.to_account_info(),authority:a.launcher.to_account_info()},&[launcher_seeds]))?;
  if budget>spent{anchor_lang::system_program::transfer(CpiContext::new_with_signer(a.system_program.to_account_info(),anchor_lang::system_program::Transfer{from:a.launcher.to_account_info(),to:a.window.to_account_info()},&[launcher_seeds]),budget-spent)?;}
  let creator_refund=creator_buy-creator_spent;if creator_refund>0{move_lamports(&a.window.to_account_info(),&a.creator.to_account_info(),creator_refund)?;}
- if a.window.creator_tokens>0{let mut d=vec![129,178,2,13,217,172,230,218];d.extend_from_slice(&a.window.creator_tokens.to_le_bytes());raw_cpi(a.launchlab.to_account_info(),vec![(a.launcher.to_account_info(),true,true),(a.window.to_account_info(),true,false),(a.pool.to_account_info(),true,false),(a.vesting_record.to_account_info(),true,false),(a.system_program.to_account_info(),false,false)],d,&[launcher_seeds])?;}
  let w=&mut ctx.accounts.window;w.raised=pledge_spent;w.window_tokens=window_tokens;w.creator_buy_tokens=creator_tokens;w.dev_claimed=!dev_locked||creator_tokens==0;w.state=LIVE;w.pool=ctx.accounts.pool.key();w.fundraising_target=GRADUATION_QUOTE;emit!(WindowSettled{window:w.key(),state:w.state,raised:pledge_spent});emit!(FirstBuy{window:w.key(),spent,bought,creator_spent,creator_tokens,migration_pending:status!=0});Ok(())
 }
 #[event]pub struct FirstBuy{pub window:Pubkey,pub spent:u64,pub bought:u64,pub creator_spent:u64,pub creator_tokens:u64,pub migration_pending:bool}
@@ -127,28 +124,6 @@ pub fn settle(ctx:Context<SettleLaunch>)->Result<()>{
  #[account(mut,seeds=[b"launcher",window.key().as_ref()],bump=window.launcher_bump)]pub launcher:SystemAccount<'info>,pub system_program:Program<'info,System>
 }
 pub fn reserve(ctx:Context<ClaimReserve>)->Result<()>{let w=&ctx.accounts.window;require!(w.state!=OPEN,ErrCode::State);let wk=w.key();let bump=[w.launcher_bump];let signer:&[&[u8]]=&[b"launcher",wk.as_ref(),&bump];anchor_lang::system_program::transfer(CpiContext::new_with_signer(ctx.accounts.system_program.to_account_info(),anchor_lang::system_program::Transfer{from:ctx.accounts.launcher.to_account_info(),to:ctx.accounts.creator.to_account_info()},&[signer]),ctx.accounts.launcher.lamports())}
-#[derive(Accounts)]pub struct ClaimNativeVested<'info>{
- #[account(mut,seeds=[b"window",window.mint.as_ref()],bump=window.bump,has_one=creator)]pub window:Account<'info,Window>,#[account(mut)]pub creator:Signer<'info>,
- /// CHECK: fixed executable program.
- #[account(address=LAUNCHLAB,executable)]pub launchlab:UncheckedAccount<'info>,
- /// CHECK: stored pool, owner verified.
- #[account(mut,address=window.pool,owner=LAUNCHLAB)]pub pool:UncheckedAccount<'info>,
- /// CHECK: canonical vault authority.
- #[account(address=pda(&[b"vault_auth_seed"]))]pub authority:UncheckedAccount<'info>,
- /// CHECK: canonical vesting record; CPI verifies beneficiary.
- #[account(mut,address=pda(&[b"pool_vesting",pool.key().as_ref(),window.key().as_ref()]),owner=LAUNCHLAB)]pub vesting_record:UncheckedAccount<'info>,
- #[account(address=window.mint)]pub mint:Account<'info,Mint>,
- #[account(mut,address=pda(&[b"pool_vault",pool.key().as_ref(),window.mint.as_ref()]))]pub base_vault:Account<'info,TokenAccount>,
- #[account(mut,associated_token::mint=mint,associated_token::authority=window)]pub token_vault:Account<'info,TokenAccount>,
- #[account(init_if_needed,payer=creator,associated_token::mint=mint,associated_token::authority=creator)]pub destination:Account<'info,TokenAccount>,
- pub token_program:Program<'info,Token>,pub associated_token_program:Program<'info,AssociatedToken>,pub system_program:Program<'info,System>
-}
-pub fn vested(ctx:Context<ClaimNativeVested>)->Result<()>{
- let a=&ctx.accounts;let w=&a.window;require!(w.state==LIVE&&!w.vested_claimed&&w.creator_tokens>0&&Clock::get()?.unix_timestamp>=w.vest_at,ErrCode::Time);let mint=w.mint;let bump=[w.bump];let signer:&[&[u8]]=&[b"window",mint.as_ref(),&bump];let before=a.token_vault.amount;
- raw_cpi(a.launchlab.to_account_info(),vec![(w.to_account_info(),true,true),(a.authority.to_account_info(),false,false),(a.pool.to_account_info(),true,false),(a.vesting_record.to_account_info(),true,false),(a.base_vault.to_account_info(),true,false),(a.token_vault.to_account_info(),true,false),(a.mint.to_account_info(),false,false),(a.token_program.to_account_info(),false,false),(a.system_program.to_account_info(),false,false),(a.associated_token_program.to_account_info(),false,false)],vec![49,33,104,30,189,157,79,35],&[signer])?;
- require!(token_amount(&a.token_vault.to_account_info())?.checked_sub(before)==Some(w.creator_tokens),ErrCode::Amount);
- token::transfer(CpiContext::new_with_signer(a.token_program.to_account_info(),Transfer{from:a.token_vault.to_account_info(),to:a.destination.to_account_info(),authority:w.to_account_info()},&[signer]),w.creator_tokens)?;ctx.accounts.window.vested_claimed=true;Ok(())
-}
 #[derive(Accounts)]pub struct ClaimCreatorFees<'info>{
  #[account(seeds=[b"window",window.mint.as_ref()],bump=window.bump,has_one=creator)]pub window:Account<'info,Window>,#[account(mut)]pub creator:Signer<'info>,
  #[account(mut,seeds=[b"launcher",window.key().as_ref()],bump=window.launcher_bump)]pub launcher:SystemAccount<'info>,

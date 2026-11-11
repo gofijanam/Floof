@@ -22,6 +22,8 @@ export interface Coin {
   minTarget: number // SOL
   pledged: number; pledgers: number
   lockDays: number; quote?: string; devLocked?: boolean
+  /** Create-page preview: show the window length instead of a countdown; hide the lock until it is chosen. */
+  draft?: boolean; lockUnset?: boolean
   // post-window
   clearingPrice: number; price: number; change24h: number; volume24h: number
   curveSol: number // SOL deposited in LaunchLab curve so far
@@ -54,7 +56,7 @@ export function settle(c: Coin, myPledge = 0) {
 const ACCS: Accessory[] = ['bow', 'leaf', 'crown', 'star', 'boba', 'halo', 'sprout', 'cap', 'phones', 'none']
 
 export const CREATORS: Creator[] = [
-  { handle: 'mochimaker', name: 'Mochi Maker', rep: 94, tier: 'Legend', launches: 14, graduated: 9, joined: 'Mar 2026', followers: 18420, bio: 'Baking squishy coins since the first fair window. Creator tokens always locked, LP always locked.', hue: 200, accessory: 'crown', wallet: 'MoCH1mkr9pQ2vXc7Lw4Rz8TnYb3sKfEuGd6hJaV5' },
+  { handle: 'mochimaker', name: 'Mochi Maker', rep: 94, tier: 'Legend', launches: 14, graduated: 9, joined: 'Mar 2026', followers: 18420, bio: 'Baking squishy coins since the first fair window. Dev buy always locked, LP always locked.', hue: 200, accessory: 'crown', wallet: 'MoCH1mkr9pQ2vXc7Lw4Rz8TnYb3sKfEuGd6hJaV5' },
   { handle: 'cloudkitchen', name: 'Cloud Kitchen', rep: 88, tier: 'Cloud', launches: 9, graduated: 5, joined: 'May 2026', followers: 9310, bio: 'Food-themed floofs. Every launch ships with a meme pack and a 90-day dev lock.', hue: 330, accessory: 'boba', wallet: 'CLdK1tcHn4Wq8PzR2vL6mXy9bT3sFgE7uJaD5hK' },
   { handle: 'yuzu_dev', name: 'yuzu.dev', rep: 81, tier: 'Cloud', launches: 6, graduated: 3, joined: 'Jun 2026', followers: 5120, bio: 'Citrus energy. Ships tools for holders, not exits.', hue: 50, accessory: 'leaf', wallet: 'YuZu7dEv3Kq9WpR2mL8xN4bT6sFgH5jCaV1zD' },
   { handle: 'pastelwizard', name: 'Pastel Wizard', rep: 76, tier: 'Puff', launches: 4, graduated: 2, joined: 'Aug 2026', followers: 3870, bio: 'Casts gentle spells on charts. ✨', hue: 275, accessory: 'star', wallet: 'PsTW1z4rD9qK2mL7xN3bT8vR5sFgH6jCaE1uY' },

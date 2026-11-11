@@ -9,7 +9,7 @@ export function seedState(templates,now=Date.now()){
     const active=i<5,curve=i>=9;
     const start=active?now-60000:curve?now-3600000:now+(i-4)*600000;
     const sol=curve?30*L:0;state.grants+=sol;
-    state.coins[t.id]={...t,ca:`sandbox-${t.id}`,creatorId:null,createdAt:now,windowStart:start,windowEnd:active?now+24*3600000:start+600000,durationMs:active?24*3600000+60000:600000,status:curve?'curve':active?'open':'upcoming',price:curve?30/600e6:0,clearingPrice:curve?30/300e6:0,pledged:0,pledgers:0,holders:0,volume24h:0,change24h:0,snipersBlocked:0,curveSol:sol/L,truth:blankTruth(),tags:[...t.tags,'sandbox'],example:true,maxRaiseL:Math.round(t.priceCeiling*t.windowTokens*L),minTargetL:Math.round(t.minTarget*L),windowUnits:Math.round(t.windowTokens*U),pledges:{},creatorUnits:0,vestAt:0,pool:{sol,tokens:curve?600e6*U:0},refundVault:0,tokenVault:0,raisedL:0,settledAt:curve?now:0,revision:0};
+    state.coins[t.id]={...t,ca:`sandbox-${t.id}`,creatorId:null,createdAt:now,windowStart:start,windowEnd:active?now+24*3600000:start+600000,durationMs:active?24*3600000+60000:600000,status:curve?'curve':active?'open':'upcoming',price:curve?30/600e6:0,clearingPrice:curve?30/300e6:0,pledged:0,pledgers:0,holders:0,volume24h:0,change24h:0,snipersBlocked:0,curveSol:sol/L,truth:blankTruth(),tags:[...t.tags,'sandbox'],example:true,maxRaiseL:Math.round(t.priceCeiling*t.windowTokens*L),minTargetL:Math.round(t.minTarget*L),windowUnits:Math.round(t.windowTokens*U),pledges:{},vestAt:0,pool:{sol,tokens:curve?600e6*U:0},refundVault:0,tokenVault:0,raisedL:0,settledAt:curve?now:0,revision:0};
   }
   return state;
 }
@@ -29,12 +29,10 @@ export function validateCoin(f,now){
   // The presale is the first buy on the standard LaunchLab curve (85 SOL graduation).
   const solOrZero=v=>v===undefined||v===null||v===''||Number(v)===0?0:fixed(v),maxRaiseL=solOrZero(f.maxRaise),creatorBuyL=solOrZero(f.creatorBuy),firstBuyL=BigInt(maxRaiseL)+BigInt(creatorBuyL);
   requireThat(firstBuyL>=MIN_FIRST_BUY&&firstBuyL<=MAX_FIRST_BUY,'RAISE',`Raise plus creator buy must be ${Number(MIN_FIRST_BUY)/L}–${Number(MAX_FIRST_BUY)/L} SOL.`);
-  requireThat(typeof f.creatorPct==='number'&&f.creatorPct>=0&&f.creatorPct<=5&&Number.isInteger(f.creatorPct*2),'CREATOR_ALLOCATION','Creator allocation must be 0–5%.');
-  const quote=firstBuyQuote({raise:BigInt(maxRaiseL),creatorBuy:BigInt(creatorBuyL),locked:BigInt(Math.round(SUPPLY*f.creatorPct/100))}),windowUnits=Number(quote.windowTokens),price=quote.avgPrice;
+  const quote=firstBuyQuote({raise:BigInt(maxRaiseL),creatorBuy:BigInt(creatorBuyL)}),windowUnits=Number(quote.windowTokens),price=quote.avgPrice;
   const minTargetL=solOrZero(f.minTarget);
   requireThat((maxRaiseL===0?minTargetL===0:minTargetL>=maxRaiseL/10)&&minTargetL<=maxRaiseL,'TARGET','Minimum target must be 10–100% of the maximum raise.');
-  const lockDays=f.lockDays??0;requireThat(Number.isInteger(lockDays)&&lockDays>=0&&lockDays<=MAX_LOCK_DAYS,'LOCK',`Dev lock must be 0–${MAX_LOCK_DAYS} days.`);requireThat(f.creatorPct===0||lockDays>=30,'LOCK','A creator allocation needs a lock of at least 30 days.');
-  requireThat(typeof f.creatorPct==='number'&&f.creatorPct>=0&&f.creatorPct<=5&&Number.isInteger(f.creatorPct*2),'CREATOR_ALLOCATION','Creator allocation must be 0–5%.');
+  const lockDays=f.lockDays??0;requireThat(Number.isInteger(lockDays)&&lockDays>=0&&lockDays<=MAX_LOCK_DAYS,'LOCK',`Dev lock must be 0–${MAX_LOCK_DAYS} days.`);
   const links={};for(const key of ['web','tg','x']){
    let value=String(f[key]||'').trim();requireThat(value.length<=256,'LINK','Link too long.');
    if(value&&key==='web'){let url;try{url=new URL(value)}catch{}requireThat(url?.protocol==='https:'&&!url.username&&!url.password&&url.hostname.includes('.'),'LINK','Website must be a public HTTPS URL.');value=url.href}
@@ -45,7 +43,7 @@ export function validateCoin(f,now){
   const image=f.image||null;requireThat(!image||/^\/api\/images\/[a-f0-9]{64}\.(png|jpg|gif|webp)$/.test(image),'IMAGE','Upload the image before creating the coin.');
   requireThat(['none','bow','leaf','crown','star','boba','halo','sprout','cap','phones'].includes(f.acc??'none'),'ACCESSORY','Invalid mascot style.');
   requireThat(Number.isInteger(f.hue??200)&&(f.hue??200)>=0&&(f.hue??200)<=359,'COLOR','Invalid color.');
-  return {name,ticker,tagline:desc,hue:f.hue??200,accessory:f.acc??'none',priceCeiling:price,maxRaiseL,creatorBuyL,minTargetL,windowUnits,graduationTarget:quote.graduationSol,windowTokens:windowUnits/U,minTarget:minTargetL/L,creatorUnits:Math.round(SUPPLY*f.creatorPct/100),creatorPct:f.creatorPct,lockDays,quote:'SOL',windowStart:now,windowEnd:now+durationMin*60000,durationMs:durationMin*60000,links,image,policy:{walletAge:!!f.walletAge,balHistory:!!f.balHistory}};
+  return {name,ticker,tagline:desc,hue:f.hue??200,accessory:f.acc??'none',priceCeiling:price,maxRaiseL,creatorBuyL,minTargetL,windowUnits,graduationTarget:quote.graduationSol,windowTokens:windowUnits/U,minTarget:minTargetL/L,lockDays,quote:'SOL',windowStart:now,windowEnd:now+durationMin*60000,durationMs:durationMin*60000,links,image,policy:{walletAge:!!f.walletAge,balHistory:!!f.balHistory}};
 }
 export function createCoin(s,id,f,now){
  const a=account(s,id),v=validateCoin(f,now);requireThat(!Object.values(s.coins).some(c=>c.ticker===v.ticker),'TICKER_EXISTS','This ticker is already taken.',409);
@@ -76,7 +74,7 @@ export function settleCoin(s,c,now){
    Object.assign(p,allocation(p.amount,total,c.maxRaiseL,c.windowUnits,c.minTargetL));refunds+=p.refund;tokens+=p.tokens;filled+=p.filled;
    const a=s.accounts[aid];a.tickets.push({coin:c.id,ticker:c.ticker,no:String(s.sequence+1).padStart(6,'0'),date:new Date(now).toISOString().slice(0,10),pledged:p.amount/L,filled:p.filled/L,rarity:p.at-c.windowStart<=180000?'Gold':'Pink',hue:c.hue,accessory:c.accessory});
  }
- c.refundVault=refunds;c.tokenVault=tokens;c.pool={sol:filled,tokens:failed?0:SUPPLY-c.windowUnits-c.creatorUnits};c.price=c.pool.tokens?c.pool.sol/L/(c.pool.tokens/U):0;c.curveSol=c.pool.sol/L;
+ c.refundVault=refunds;c.tokenVault=tokens;c.pool={sol:filled,tokens:failed?0:SUPPLY-c.windowUnits};c.price=c.pool.tokens?c.pool.sol/L/(c.pool.tokens/U):0;c.curveSol=c.pool.sol/L;
  // Pro-rata SOL rounding dust belongs to refunds; using sum(filled) conserves every lamport.
  c.raisedL=filled;
  c.revision++;addEvent(s,c,null,failed?'refunding':'settle',filled,now);return true;
@@ -91,9 +89,6 @@ export function claim(s,id,b,now){
  if(b.id.startsWith('window:')){
   const c=coin(s,b.id.slice(7)),p=c.pledges[id];requireThat(c.settledAt&&p,'NO_CLAIM','No settled pledge to claim.',404);requireThat(!p.claimed,'ALREADY_CLAIMED','This pledge was already claimed.',409);
   a.balance+=p.refund;c.refundVault-=p.refund;c.tokenVault-=p.tokens;const pos=position(a,c.id);pos.tokens+=p.tokens;pos.cost+=p.filled;p.claimed=true;c.revision++;addEvent(s,c,a,'claim',p.refund,now);return {refund:p.refund/L,tokens:p.tokens/U};
- }
- if(b.id.startsWith('vesting:')){
-  const c=coin(s,b.id.slice(8));requireThat(c.creatorId===id&&now>=c.vestAt&&c.creatorUnits>0&&c.status!=='refunding','VESTING','Creator allocation is still locked.',409);const tokens=c.creatorUnits;position(a,c.id).tokens+=tokens;c.creatorUnits=0;return {tokens:tokens/U};
  }
  const cl=a.claims.find(x=>x.id===b.id);requireThat(cl&&!cl.claimed,'NO_CLAIM','Claim not found or already claimed.',409);a.balance+=cl.amountL;cl.claimed=true;return {refund:cl.amountL/L,tokens:0};
 }
@@ -142,12 +137,11 @@ export function publicCoin(s,c,now){const trades=s.trades.filter(t=>t.coin===c.i
 export function snapshot(s,id,now=Date.now()){
  const a=s.accounts[id],scouts=scoutRows(s,now),claims=a?[...a.claims.map(c=>({...c,amount:c.amountL/L})),...Object.values(s.coins).filter(c=>c.settledAt&&c.pledges[id]).map(c=>({id:`window:${c.id}`,coin:c.id,kind:'refund',amount:c.pledges[id].refund/L,tokens:c.pledges[id].tokens/U,note:c.status==='refunding'?'Window missed its target · full refund':'Window tokens + unused SOL',claimed:c.pledges[id].claimed}))]:[];
  if(a){
-  for(const c of Object.values(s.coins))if(c.creatorId===id&&c.creatorUnits>0&&now>=c.vestAt&&['curve','graduated'].includes(c.status))claims.push({id:`vesting:${c.id}`,coin:c.id,kind:'vesting',amount:0,tokens:c.creatorUnits/U,note:'Unlocked creator allocation',claimed:false});
   if(a.creatorFees>0)claims.push({id:'creator-fees',coin:Object.values(s.coins).find(c=>c.creatorId===id)?.id,kind:'fees',amount:a.creatorFees/L,note:'Accrued creator trading fees',claimed:false});
  }
  return {mode:'sandbox',network:'offchain',now,wallet:!!a,walletAddress:a?.linkedWallet||a?.wallet||'',linkedWallet:a?.linkedWallet||null,sol:(a?.balance||0)/L,coins:Object.values(s.coins).map(c=>publicCoin(s,c,now)),creators:[...new Set(Object.values(s.coins).map(c=>c.creator))].map(h=>creator(s,h,now)),feed:s.events.filter(e=>['pledge','blocked','buy','sell'].includes(e.kind)).slice(0,120).map(e=>({...e,wallet:e.accountId===id?'you':e.wallet})),myPledges:Object.fromEntries(Object.values(s.coins).filter(c=>c.pledges[id]).map(c=>[c.id,c.pledges[id].amount/L])),positions:Object.fromEntries(Object.entries(a?.positions||{}).map(([cid,p])=>[cid,{tokens:p.tokens/U,cost:p.cost/L}])),claims,tickets:a?.tickets||[],scouts:scouts.map(r=>({...r,me:r.account===id,account:undefined})),following:s.follows[id]||[],stats:{launched:Object.values(s.coins).filter(c=>c.settledAt&&!c.example&&c.status!=='refunding').length,snipersBlocked:0,refunded:s.events.filter(e=>e.kind==='claim').reduce((n,e)=>n+e.amount,0),pledged24h:s.events.filter(e=>e.kind==='pledge'&&e.t>=now-DAYS).reduce((n,e)=>n+e.amount,0)},integrations:{solana:'not_deployed',launchlab:'not_connected',indexer:'not_configured',truth:'sandbox_events_only'}};
 }
-export function holders(s,c){const rows=Object.values(s.accounts).map(a=>({wallet:a.linkedWallet||a.wallet,tokens:a.positions[c.id]?.tokens||0,tag:''})).filter(a=>a.tokens>0);if(c.pool.tokens)rows.push({wallet:'Sandbox pool',tokens:c.pool.tokens,tag:'curve'});if(c.tokenVault)rows.push({wallet:'Unclaimed window tokens',tokens:c.tokenVault,tag:'window'});if(c.creatorUnits)rows.push({wallet:'Creator vesting vault',tokens:c.creatorUnits,tag:'vesting'});return rows.sort((a,b)=>b.tokens-a.tokens).map(r=>({...r,pct:r.tokens/SUPPLY*100,tokens:r.tokens/U}))}
+export function holders(s,c){const rows=Object.values(s.accounts).map(a=>({wallet:a.linkedWallet||a.wallet,tokens:a.positions[c.id]?.tokens||0,tag:''})).filter(a=>a.tokens>0);if(c.pool.tokens)rows.push({wallet:'Sandbox pool',tokens:c.pool.tokens,tag:'curve'});if(c.tokenVault)rows.push({wallet:'Unclaimed window tokens',tokens:c.tokenVault,tag:'window'});return rows.sort((a,b)=>b.tokens-a.tokens).map(r=>({...r,pct:r.tokens/SUPPLY*100,tokens:r.tokens/U}))}
 export function candles(s,c,tf='1h'){const ms={'5m':300000,'1h':3600000,'4h':14400000,'1d':DAYS}[tf];requireThat(ms,'TIMEFRAME','Unsupported candle timeframe.');const groups=new Map();for(const t of s.trades.filter(t=>t.coin===c.id)){const key=Math.floor(t.t/ms)*ms;if(!groups.has(key))groups.set(key,[key,t.price,t.price,t.price,t.price,t.amount]);else {const g=groups.get(key);g[2]=Math.max(g[2],t.price);g[3]=Math.min(g[3],t.price);g[4]=t.price;g[5]+=t.amount}}return [...groups.values()].slice(-500)}
 export function audit(s){let sum=s.fees.protocol+s.fees.platform;for(const a of Object.values(s.accounts)){sum+=a.balance+a.creatorFees;for(const cl of a.claims)if(!cl.claimed)sum+=cl.amountL;requireThat(a.balance>=0&&Object.values(a.positions).every(p=>p.tokens>=0&&p.cost>=0),'INVARIANT','Negative account balance.',500)}for(const c of Object.values(s.coins)){sum+=c.pool.sol+c.refundVault;if(!c.settledAt)sum+=Object.values(c.pledges).reduce((n,p)=>n+p.amount,0);requireThat(c.pool.sol>=0&&c.pool.tokens>=0&&c.refundVault>=0&&c.tokenVault>=0,'INVARIANT','Negative vault balance.',500)}requireThat(sum===s.grants,'INVARIANT',`Ledger conservation failed: ${sum} != ${s.grants}`,500);return {credits:s.grants,accounted:sum,balanced:true}}
 export function command(s,id,kind,b,now=Date.now()){

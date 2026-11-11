@@ -100,7 +100,7 @@ function Hero({ ready }: { ready: boolean }) {
           <motion.div {...H} transition={{ delay: 0.65, duration: 0.6 }} className="mt-8 hidden gap-6 text-sm font-bold text-lav sm:flex">
             <span className="flex items-center gap-1.5"><IShield s={16} className="text-mint" /> no snipers</span>
             <span className="flex items-center gap-1.5"><IUsers s={16} className="text-blue" /> 1% wallet cap</span>
-            <span className="flex items-center gap-1.5"><ILock s={16} className="text-pink" /> creator lock</span>
+            <span className="flex items-center gap-1.5"><ILock s={16} className="text-pink" /> dev-buy lock</span>
           </motion.div>
         </div>
 

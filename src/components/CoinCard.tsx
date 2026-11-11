@@ -31,8 +31,8 @@ export const CoinCard = memo(forwardRef<HTMLDivElement, { coin: Coin }>(function
             <div className="mt-0.5 truncate text-sm font-bold text-lav">{c.name}</div>
             <div className="mt-1 flex items-center gap-1.5 text-[11px] font-extrabold text-lav/80">
               <span className="h-2.5 w-2.5 rounded-full" style={{ background: `hsl(${cr.hue} 90% 70%)` }} />@{cr.handle}
-              <span className="text-mint tnum">rep {cr.rep}</span>
-              <span className="inline-flex items-center gap-0.5 text-blue tnum"><ILock s={11} />{c.lockDays ? `${c.lockDays}d lock` : 'no lock'}</span>
+              <span className="whitespace-nowrap text-mint tnum">rep {cr.rep}</span>
+              {!c.lockUnset && <span className="inline-flex items-center gap-0.5 whitespace-nowrap text-blue tnum" title="dev-buy lock"><ILock s={11} />{c.lockDays ? `${c.lockDays}d lock` : 'no lock'}</span>}
             </div>
           </div>
           <StatusPill c={c} />
@@ -41,7 +41,7 @@ export const CoinCard = memo(forwardRef<HTMLDivElement, { coin: Coin }>(function
           {c.status === 'open' && (
             <>
               <div className="mb-2 flex items-end justify-between">
-                <div><div className="label">window closes</div><Countdown ms={left} size="md" /></div>
+                {c.draft ? <div><div className="label">fair window</div><div className="font-num text-2xl font-semibold text-blue tnum" style={{ textShadow: '0 0 24px rgba(95,212,255,.45)' }}>{Math.round(c.durationMs / 60000)} min</div></div> : <div><div className="label">window closes</div><Countdown ms={left} size="md" /></div>}
                 <div className="text-right"><div className="label">ceiling</div><div className="font-num text-sm font-semibold tnum">{fmtPrice(c.priceCeiling)}</div></div>
               </div>
               <MiniMeter coin={c} />
@@ -80,6 +80,7 @@ export const CoinCard = memo(forwardRef<HTMLDivElement, { coin: Coin }>(function
 function StatusPill({ c }: { c: Coin }) {
   const map = { refunding: ['REFUND', 'text-blue bg-blue/10 ring-blue/30'],
     open: ['LIVE', 'text-mint bg-mint/10 ring-mint/30'], upcoming: ['SOON', 'text-blue bg-blue/10 ring-blue/30'], curve: ['CURVE', 'text-pink bg-pink/10 ring-pink/30'], graduated: ['CPMM', 'text-lav bg-lav/10 ring-lav/30'] } as const
+  if (c.draft) return <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full px-2 py-1 text-[10px] font-black text-lav bg-lav/10 ring-1 ring-lav/30">PREVIEW</span>
   const [t, cls] = map[c.status]
   return <span className={cx('inline-flex shrink-0 items-center gap-1.5 rounded-full px-2 py-1 text-[10px] font-black ring-1', cls)}>{c.status === 'open' && <LiveDot />}{t}</span>
 }

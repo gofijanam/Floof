@@ -25,9 +25,9 @@ const fmtSol = (n: number) => (Math.round(n * 100) / 100).toString()
 interface Form {
   name: string; ticker: string; desc: string; image: string | null; hue: number; acc: Accessory; x: string; tg: string; web: string
   durationMin: number; maxRaise: string; creatorBuy: string; minTarget: string; walletAge: boolean; balHistory: boolean
-  creatorPct: number; lockDays: number; quote: string
+  lockDays: number; quote: string
 }
-const init: Form = { name: '', ticker: '', desc: '', image: null, hue: 200, acc: 'none', x: '', tg: '', web: '', durationMin: DEFAULT_WINDOW_SECS / 60, maxRaise: '40', creatorBuy: '0', minTarget: '20', walletAge: true, balHistory: false, creatorPct: 2, lockDays: 90, quote: 'SOL' }
+const init: Form = { name: '', ticker: '', desc: '', image: null, hue: 200, acc: 'none', x: '', tg: '', web: '', durationMin: DEFAULT_WINDOW_SECS / 60, maxRaise: '40', creatorBuy: '0', minTarget: '20', walletAge: true, balHistory: false, lockDays: 30, quote: 'SOL' }
 
 export default function Create() {
   const [f, setF] = useState<Form>(init)
@@ -70,7 +70,7 @@ export default function Create() {
   // Live numbers from the standard Raydium LaunchLab curve (same integer math and constants as the program).
   const maxRaise = parseFloat(f.maxRaise) || 0
   const creatorBuy = parseFloat(f.creatorBuy) || 0
-  const curve = useMemo(() => { try { return firstBuyQuote({ raise: toLamports(maxRaise), creatorBuy: toLamports(creatorBuy), locked: BigInt(Math.round(SUPPLY * f.creatorPct / 100 * 1e6)) }) } catch { return null } }, [maxRaise, creatorBuy, f.creatorPct])
+  const curve = useMemo(() => { try { return firstBuyQuote({ raise: toLamports(maxRaise), creatorBuy: toLamports(creatorBuy) }) } catch { return null } }, [maxRaise, creatorBuy])
   const windowTokens = curve ? Number(curve.windowTokens) / 1e6 : 0
   const ceiling = curve ? curve.avgPrice : 0
   const minT = parseFloat(f.minTarget) || 0
@@ -93,7 +93,6 @@ export default function Create() {
     else if (minT < maxRaise * 0.1) e.minTarget = `At least 10% of max raise (${(maxRaise * 0.1).toFixed(1)} SOL)`
     else if (minT > maxRaise) e.minTarget = 'Cannot exceed max raise'
     if (!(Number.isInteger(f.durationMin) && f.durationMin >= MIN_WIN && f.durationMin <= MAX_WIN)) e.durationMin = `Choose ${MIN_WIN}–${MAX_WIN} minutes`
-    if (f.creatorPct > 0 && f.lockDays < 30) e.lockDays = 'A creator allocation needs a lock of at least 30 days'
     if (!QUOTES.some((q) => q.symbol === f.quote && q.live)) e.quote = 'Only SOL pairs are live right now'
     if (wallet && !e.creatorBuy && 0.02 + reserve + creatorBuy > bal) e.creatorBuy = 'Not enough test SOL for the fee, reserve and your dev buy'
     return e
@@ -105,14 +104,14 @@ export default function Create() {
   const preview: Coin = useMemo(() => {
     const now = Date.now()
     return {
-      id: 'preview', ticker: f.ticker || 'TICKER', name: f.name || 'Your coin', tagline: f.desc, hue: f.hue, accessory: f.acc, creator: 'newfloof', status: 'open', ca: 'pending',
+      id: 'preview', ticker: f.ticker || 'TICKER', name: f.name || 'Your coin', tagline: f.desc, hue: f.hue, accessory: f.acc, creator: 'newfloof', status: 'open', ca: 'pending', draft: true, lockUnset: step < 2 || creatorBuy === 0,
       windowStart: now, windowEnd: now + f.durationMin * 60e3, durationMs: f.durationMin * 60e3, priceCeiling: ceiling, windowTokens, minTarget: minT, graduationTarget: curve?.graduationSol ?? 0,
-      pledged: 0, pledgers: 0, lockDays: f.lockDays, quote: f.quote, clearingPrice: 0, price: 0, change24h: 0, volume24h: 0, curveSol: 0, holders: 0, snipersBlocked: 0,
+      pledged: 0, pledgers: 0, lockDays: creatorBuy > 0 ? f.lockDays : 0, quote: f.quote, clearingPrice: 0, price: 0, change24h: 0, volume24h: 0, curveSol: 0, holders: 0, snipersBlocked: 0,
       truth: { grade: 'N/A', score: 0, realPct: 0, sybilClusters: 0, washPct: 0 }, createdAgo: 0, tags: [],
     }
-  }, [f, ceiling, windowTokens, minT, curve])
+  }, [f, ceiling, windowTokens, minT, curve, step, creatorBuy])
   const create = async () => {
-    const result = await addCoin(f)
+    const result = await addCoin({ ...f, lockDays: creatorBuy > 0 ? f.lockDays : 0 })
     try { const d = await api('/drafts/launch', { form: null, revision: draftRevision }); setDraftRevision(d.revision) } catch {}
     setOpen(false); setDone(result.coin); confetti({ n: 140 }); return result
   }
@@ -186,9 +185,8 @@ export default function Create() {
                   <SliderField label="Fair window duration" value={`${f.durationMin} min`} hint="opens the moment your coin is created" error={err('durationMin')}
                     min={MIN_WIN} max={MAX_WIN} step={5} v={f.durationMin} onChange={(v) => set('durationMin', v)} aria="Fair window duration in minutes" ticks={['5 min', '15', '30', '45', '60 min']} accent="blue" />
                   <div>
-                    <SliderField label="Presale raise" value={`${fmtSol(maxRaise)} SOL`} hint={`0–${fmtSol(MAX_BUY_SOL - creatorBuy)} SOL · drag or type`} error={err('maxRaise')}
-                      min={0} max={MAX_BUY_SOL - creatorBuy} step={0.5} v={maxRaise} onChange={(v) => { set('maxRaise', fmtSol(v)); if ((parseFloat(f.minTarget) || 0) > v || (v > 0 && (parseFloat(f.minTarget) || 0) < v * 0.1) || v === 0) set('minTarget', fmtSol(v === 0 ? 0 : Math.max(v * 0.5, 0))) }} aria="Presale raise in SOL" ticks={['0', '20', '40', '60', `${fmtSol(MAX_BUY_SOL - creatorBuy)} SOL`]} accent="pink"
-                      input={<input aria-label="Presale raise SOL amount" className="input w-24 !py-1.5 text-right font-num tnum" inputMode="decimal" value={f.maxRaise} onChange={(e) => set('maxRaise', e.target.value.replace(/[^0-9.]/g, ''))} />} />
+                    <SliderField label="Presale raise" value={`${fmtSol(maxRaise)} SOL`} hint={`0–${fmtSol(MAX_BUY_SOL - creatorBuy)} SOL`} error={err('maxRaise')}
+                      min={0} max={MAX_BUY_SOL - creatorBuy} step={0.5} v={maxRaise} onChange={(v) => { set('maxRaise', fmtSol(v)); if ((parseFloat(f.minTarget) || 0) > v || (v > 0 && (parseFloat(f.minTarget) || 0) < v * 0.1) || v === 0) set('minTarget', fmtSol(v === 0 ? 0 : Math.max(v * 0.5, 0))) }} aria="Presale raise in SOL" ticks={['0', '20', '40', '60', `${fmtSol(MAX_BUY_SOL - creatorBuy)} SOL`]} accent="pink" />
                   </div>
                   <div className="grid gap-4 sm:grid-cols-2">
                     <Field label="Min target (SOL)" error={err('minTarget')} hint="else everyone is refunded"><input aria-label="Minimum target in SOL" className="input font-num tnum" inputMode="decimal" value={f.minTarget} onChange={(e) => set('minTarget', e.target.value.replace(/[^0-9.]/g, ''))} /></Field>
@@ -220,26 +218,26 @@ export default function Create() {
                     <p className="mt-2 text-[11px] font-semibold text-lav/70">Raydium LaunchLab supports more quote mints (USD1, USDC, USDT and others). Floof’s fair-window escrow holds SOL today, so stable pairs arrive once the escrow supports SPL tokens.</p>
                   </div>
                   <SliderField label="Dev buy" value={`${fmtSol(creatorBuy)} SOL`} hint="optional · same clearing price as every pledger" error={err('creatorBuy')}
-                    min={0} max={Math.max(0, Math.min(10, MAX_BUY_SOL - maxRaise))} step={0.1} v={creatorBuy} onChange={(v) => set('creatorBuy', fmtSol(v))} aria="Dev buy in SOL" ticks={['0', `${fmtSol(Math.max(0, Math.min(10, MAX_BUY_SOL - maxRaise)))} SOL`]} accent="blue"
-                    input={<input aria-label="Dev buy SOL amount" className="input w-24 !py-1.5 text-right font-num tnum" inputMode="decimal" value={f.creatorBuy} onChange={(e) => set('creatorBuy', e.target.value.replace(/[^0-9.]/g, ''))} />} />
+                    min={0} max={Math.max(0, Math.min(10, MAX_BUY_SOL - maxRaise))} step={0.1} v={creatorBuy} onChange={(v) => set('creatorBuy', fmtSol(v))} aria="Dev buy in SOL" ticks={['0', `${fmtSol(Math.max(0, Math.min(10, MAX_BUY_SOL - maxRaise)))} SOL`]} accent="blue" />
                   {curve && creatorBuy > 0 && <div className="grid gap-2 rounded-2xl bg-night/50 p-4 text-sm font-bold ring-1 ring-lav/10 sm:grid-cols-3">
                     <Stat k="You receive" v={`${(Number(curve.creatorTokens) / 1e12).toFixed(2)}M tokens`} />
                     <Stat k="Share of supply" v={`${(Number(curve.creatorTokens) / 1e13).toFixed(2)}%`} />
                     <Stat k="Your price" v={`${fmtPrice(curve.avgPrice)} SOL`} />
                   </div>}
-                  <SliderField label="Dev token lock" value={f.lockDays === 0 ? 'No lock' : `${f.lockDays} days`} hint="covers your dev buy and creator allocation" error={err('lockDays')}
-                    min={0} max={LOCK_STOPS.length - 1} step={1} v={Math.max(0, LOCK_STOPS.indexOf(f.lockDays))} onChange={(i) => set('lockDays', LOCK_STOPS[i])} aria="Dev token lock" ticks={LOCK_STOPS.map((d) => d === 0 ? 'none' : d < 365 ? `${d}d` : '1y')} accent="mint" />
-                  <SliderField label="Creator allocation" value={`${f.creatorPct}% · ${(f.creatorPct * 10).toFixed(0)}M`} hint="optional · vests through LaunchLab, unlocks after the lock" min={0} max={5} step={0.5} v={f.creatorPct} onChange={(v) => set('creatorPct', v)} aria="Creator allocation percentage" ticks={['0%', '5%']} accent="pink" />
+                  <div className={cx(creatorBuy === 0 && 'pointer-events-none opacity-45')} aria-disabled={creatorBuy === 0}>
+                    <SliderField label="Dev token lock" value={creatorBuy === 0 ? 'No dev buy' : f.lockDays === 0 ? 'No lock' : `${f.lockDays} days`} hint="optional · locks your dev-buy tokens on-chain" error={err('lockDays')}
+                      min={0} max={LOCK_STOPS.length - 1} step={1} v={Math.max(0, LOCK_STOPS.indexOf(f.lockDays))} onChange={(i) => set('lockDays', LOCK_STOPS[i])} aria="Dev token lock" ticks={LOCK_STOPS.map((d) => d === 0 ? 'none' : d < 365 ? `${d}d` : '1y')} accent="mint" />
+                  </div>
                   <div className="flex items-center gap-4 rounded-2xl bg-mint/10 p-4 ring-1 ring-mint/25">
                     <IShield s={28} className="shrink-0 text-mint" />
-                    <div className="text-sm font-bold">{f.lockDays > 0 ? <><span className="text-mint">Locked on-chain for {f.lockDays} days.</span> Your dev-buy tokens wait in the window vault and the creator allocation vests; both are claimable after the lock.</> : <><span className="text-mint">No lock.</span> Dev-buy tokens arrive in your wallet at settlement. Buyers see “no lock” on your coin.</>} No bond needed.</div>
+                    <div className="text-sm font-bold">{creatorBuy === 0 ? <><span className="text-mint">No dev buy, nothing to lock.</span> You get no tokens at launch; every presale token goes to pledgers.</> : f.lockDays > 0 ? <><span className="text-mint">Locked on-chain for {f.lockDays} days.</span> Your dev-buy tokens wait in the window vault and are claimable after the lock.</> : <><span className="text-mint">No lock.</span> Dev-buy tokens arrive in your wallet at settlement. Buyers see “no lock” on your coin.</>} No bond, no extra creator allocation.</div>
                   </div>
                 </div>
               )}
               {step === 3 && (
                 <div className="space-y-4">
                   <div className="divide-y divide-lav/10 rounded-2xl bg-night/50 text-sm ring-1 ring-lav/10">
-                    {[['Coin', `${f.name} · $${f.ticker}`], ['Pair', `$${f.ticker}/${f.quote}`], ['Fair window', `opens at creation · ${f.durationMin} min`], ['First buy', `${(maxRaise + creatorBuy).toFixed(2)} SOL (${fmtSol(maxRaise)} presale + ${fmtSol(creatorBuy)} dev buy)`], ['Clearing price at full raise', `${fmtPrice(ceiling)} SOL`], ['Supply bought at full raise', `${curve ? curve.pctOfSupply.toFixed(2) : '0'}% · ${(windowTokens / 1e6).toFixed(1)}M to presale`], ['Max raise / min target', `${maxRaise} / ${minT} SOL`], ['Migrates to Raydium at', `~${curve?.graduationSol ?? 85} SOL on the curve`], ['Per-account cap', `${(maxRaise * 0.01).toFixed(2)} SOL`], ['Dev lock', f.lockDays ? `${f.lockDays} days` : 'none'], ['Creator allocation', `${f.creatorPct}%`], ['After window', devnet?'Raydium LaunchLab':'Sandbox trading pool'], [devnet?'Trading fee':'Sandbox trading fee', `${FEES.total}% (${FEES.raydium} Raydium · ${FEES.creator} you · ${FEES.platform} platform)`]].map(([k, v]) => (
+                    {[['Coin', `${f.name} · $${f.ticker}`], ['Pair', `$${f.ticker}/${f.quote}`], ['Fair window', `opens at creation · ${f.durationMin} min`], ['First buy', `${(maxRaise + creatorBuy).toFixed(2)} SOL (${fmtSol(maxRaise)} presale + ${fmtSol(creatorBuy)} dev buy)`], ['Clearing price at full raise', `${fmtPrice(ceiling)} SOL`], ['Supply bought at full raise', `${curve ? curve.pctOfSupply.toFixed(2) : '0'}% · ${(windowTokens / 1e6).toFixed(1)}M to presale`], ['Max raise / min target', `${maxRaise} / ${minT} SOL`], ['Migrates to Raydium at', `~${curve?.graduationSol ?? 85} SOL on the curve`], ['Per-account cap', `${(maxRaise * 0.01).toFixed(2)} SOL`], ['Dev lock', creatorBuy === 0 ? 'no dev buy' : f.lockDays ? `${f.lockDays} days` : 'none'], ['After window', devnet?'Raydium LaunchLab':'Sandbox trading pool'], [devnet?'Trading fee':'Sandbox trading fee', `${FEES.total}% (${FEES.raydium} Raydium · ${FEES.creator} you · ${FEES.platform} platform)`]].map(([k, v]) => (
                       <div key={k} className="flex justify-between gap-4 px-4 py-2.5"><span className="font-bold text-lav">{k}</span><span className="text-right font-extrabold">{v}</span></div>
                     ))}
                   </div>
@@ -263,8 +261,8 @@ export default function Create() {
           <div className="pointer-events-none">{f.image ? <ImgCard f={f} preview={preview} /> : <CoinCard coin={preview} />}</div>
           <Card className="p-4 text-sm font-bold">
             <div className="mb-3 font-extrabold">Supply distribution at full raise</div>
-            {(() => { const presale = curve ? Number(curve.windowTokens) / 1e13 : 0, mine = curve ? Number(curve.creatorTokens) / 1e13 : 0, curveLeft = Math.max(0, Number(SELL) / 1e13 - presale - mine), lp = Math.max(0, 100 - presale - mine - curveLeft - f.creatorPct); const rows: [string, number, string][] = [['Fair window', presale, 'text-pink'], ['Dev buy', mine, 'text-blue'], ['Creator · locked', f.creatorPct, 'text-blue'], ['Public curve', curveLeft, 'text-mint'], ['Raydium LP at migration', lp, 'text-lav']]; return <>
-              <div className="flex h-3 overflow-hidden rounded-full" aria-label={rows.map(([l, p]) => `${l} ${p.toFixed(1)}%`).join(', ')}><span className="bg-pink" style={{ width: `${presale}%` }} /><span className="bg-blue" style={{ width: `${mine + f.creatorPct}%` }} /><span className="bg-mint" style={{ width: `${curveLeft}%` }} /><span className="flex-1 bg-lav/40" /></div>
+            {(() => { const presale = curve ? Number(curve.windowTokens) / 1e13 : 0, mine = curve ? Number(curve.creatorTokens) / 1e13 : 0, curveLeft = Math.max(0, Number(SELL) / 1e13 - presale - mine), lp = Math.max(0, 100 - presale - mine - curveLeft); const rows: [string, number, string][] = [['Fair window', presale, 'text-pink'], [creatorBuy > 0 && f.lockDays > 0 && step >= 2 ? `Dev buy · locked ${f.lockDays}d` : 'Dev buy', mine, 'text-blue'], ['Public curve', curveLeft, 'text-mint'], ['Raydium LP at migration', lp, 'text-lav']]; return <>
+              <div className="flex h-3 overflow-hidden rounded-full" aria-label={rows.map(([l, p]) => `${l} ${p.toFixed(1)}%`).join(', ')}><span className="bg-pink" style={{ width: `${presale}%` }} /><span className="bg-blue" style={{ width: `${mine}%` }} /><span className="bg-mint" style={{ width: `${curveLeft}%` }} /><span className="flex-1 bg-lav/40" /></div>
               {rows.map(([label, pct, color]) => <div key={label} className="mt-2 flex justify-between text-xs"><span className={color}>{label}</span><span className="font-num tnum">{pct.toFixed(1)}% · {(pct * 10).toFixed(1)}M</span></div>)}</> })()}
           </Card>
           <Card className="p-4 text-xs font-bold text-lav"><div className="mb-1 font-extrabold text-cream">One window, one clearing price</div>The presale is the first buy on Raydium LaunchLab’s standard curve, executed atomically when the pool is created; your optional buy is added to it at the same average price. Pledges share a 1% cap and fill pro-rata if oversubscribed; miss the minimum target and everything is refunded. Public trading then continues on the curve until ~{curve?.graduationSol ?? 85} SOL migrates it to Raydium.</Card>
@@ -335,12 +333,12 @@ function CurvePanel({ curve, raise, creatorBuy, quote = 'SOL' }: { curve: Return
 
 const ACCENT = { pink: 'accent-[#FF5FB8]', blue: 'accent-[#5FD4FF]', mint: 'accent-[#7CF5C8]' } as const
 const TEXT = { pink: 'text-pink', blue: 'text-blue', mint: 'text-mint' } as const
-function SliderField({ label, value, hint, error, min, max, step, v, onChange, aria, ticks, accent, input }: { label: string; value: string; hint?: string; error?: string | false; min: number; max: number; step: number; v: number; onChange: (v: number) => void; aria: string; ticks?: string[]; accent: keyof typeof ACCENT; input?: React.ReactNode }) {
+function SliderField({ label, value, hint, error, min, max, step, v, onChange, aria, ticks, accent }: { label: string; value: string; hint?: string; error?: string | false; min: number; max: number; step: number; v: number; onChange: (v: number) => void; aria: string; ticks?: string[]; accent: keyof typeof ACCENT }) {
   return (
     <div role="group" aria-label={label}>
       <div className="flex items-end justify-between gap-3">
         <div><div className="label">{label}</div>{hint && <div className="mt-0.5 text-[11px] font-bold text-lav/60">{hint}</div>}</div>
-        <div className="flex items-center gap-2">{input}<div className={cx('font-num text-3xl font-semibold tnum', TEXT[accent])}>{value}</div></div>
+        <div className="flex items-center gap-2"><div className={cx('font-num text-3xl font-semibold tnum', TEXT[accent])}>{value}</div></div>
       </div>
       <input type="range" min={min} max={max} step={step} value={Math.min(max, Math.max(min, v))} onChange={(e) => onChange(+e.target.value)} aria-label={aria} aria-valuetext={value}
         className={cx('mt-3 w-full', ACCENT[accent])} style={{ background: 'transparent' }} />

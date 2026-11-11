@@ -1,6 +1,6 @@
 import {requireThat} from './errors.mjs';
 const limits={quote:8,name:32,ticker:10,desc:160,x:256,tg:256,web:256,ceiling:32,minTarget:32,image:160};
-const numeric=['durationMin','alloc','creatorPct','lockDays'];
+const numeric=['durationMin','lockDays'];
 export function sanitizeDraft(input){
  requireThat(input&&typeof input==='object'&&!Array.isArray(input),'DRAFT','Invalid launch draft.');const form={};
  for(const [key,max] of Object.entries(limits)){const v=input[key];if(v===undefined)continue;if(key==='image'&&v===null){form.image=null;continue}requireThat(typeof v==='string'&&v.length<=max,'DRAFT',`Invalid ${key} in draft.`);if(key==='image')requireThat(/^\/api\/images\/[a-f0-9]{64}\.(png|jpg|gif|webp)$/.test(v),'IMAGE','Upload your image before saving the draft.');form[key]=v}

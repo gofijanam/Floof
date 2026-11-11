@@ -22,7 +22,7 @@ export function CreatorCard({ handle, lockDays }: { handle: string; lockDays: nu
         <div className="rounded-2xl bg-night/50 p-2"><div className="font-num font-semibold text-mint tnum">{c.graduated}</div><div className="text-[10px] font-extrabold text-lav">graduated</div></div>
         <div className="rounded-2xl bg-night/50 p-2"><div className="font-num font-semibold tnum">{c.launches ? Math.round(c.graduated / c.launches * 100) : 0}%</div><div className="text-[10px] font-extrabold text-lav">grad rate</div></div>
       </div>
-      <div className="mt-3 flex items-center gap-2 rounded-2xl bg-blue/10 px-3 py-2 text-xs font-extrabold text-blue ring-1 ring-blue/20"><ILock s={14} /> {lockDays > 0 ? `Creator tokens locked ${lockDays}d` : 'No creator lock on this launch'}</div>
+      <div className="mt-3 flex items-center gap-2 rounded-2xl bg-blue/10 px-3 py-2 text-xs font-extrabold text-blue ring-1 ring-blue/20"><ILock s={14} /> {lockDays > 0 ? `Dev buy locked ${lockDays}d` : 'No dev lock on this launch'}</div>
       <div className="mt-2 flex items-center gap-2 px-1 text-xs font-bold text-mint"><IShield s={14} /> Same price as every pledger · lock enforced on-chain</div>
     </Card>
   )

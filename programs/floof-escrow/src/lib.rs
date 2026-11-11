@@ -9,7 +9,7 @@ use anchor_spl::token::{self,Mint,Token,TokenAccount,Transfer};
 declare_id!("7hhrC7N6FRQyQLUbr4q9q5Dgqgj8zoDtDCiCd8m1XX3N");
 // Separate Devnet staging deployment of the standard-curve program (never upgrades the live one).
 #[cfg(feature="staging")]
-declare_id!("FUQ69B7JFcFDVfmqrZDpuUCD7kpfgLXYE2BT2DLKyhY1");
+declare_id!("5srSNJF6tGw1X8b1tZqFidZaqcwPtTFsSmqcwB8g9zHG");
 const SUPPLY:u64=1_000_000_000_000_000;
 const OPEN:u8=0; const LIVE:u8=1; const REFUNDING:u8=2;
 mod launchlab;
@@ -49,13 +49,12 @@ pub mod floof_escrow {
   require!((MIN_WINDOW_SECS..=MAX_WINDOW_SECS).contains(&params.duration),ErrCode::Time);
   let first_buy=params.max_raise.checked_add(params.creator_buy).ok_or(ErrCode::Overflow)?;
   require!((MIN_FIRST_BUY..=MAX_FIRST_BUY).contains(&first_buy)&&params.min_target>=params.max_raise/10&&params.min_target<=params.max_raise,ErrCode::RaiseCap);
-  require!(params.creator_tokens<=SUPPLY/20,ErrCode::Amount);
-  // No creator bond. One lock covers the creator allocation (LaunchLab vesting, >=30 days when used) and the dev buy.
-  require!(params.lock_days<=MAX_LOCK_DAYS&&(params.creator_tokens==0||params.lock_days>=30),ErrCode::Amount);
+  // No creator bond and no separate creator allocation: the optional lock applies to the dev buy only (0 = no lock).
+  require!(params.lock_days<=MAX_LOCK_DAYS,ErrCode::Amount);
   require!((2..=32).contains(&params.name.len())&&(2..=10).contains(&params.symbol.len())&&params.symbol.bytes().all(|b|b.is_ascii_alphanumeric())&&params.uri.starts_with("https://")&&params.uri.len()<=200,ErrCode::Config);
   if params.creator_buy>0{anchor_lang::system_program::transfer(CpiContext::new(ctx.accounts.system_program.to_account_info(),anchor_lang::system_program::Transfer{from:ctx.accounts.creator.to_account_info(),to:ctx.accounts.window.to_account_info()}),params.creator_buy)?;}
   let (global_hash,platform_hash)=launchlab::configuration(&ctx.accounts.global,&ctx.accounts.platform,&ctx.accounts.config.fee_owner)?;
-  let w=&mut ctx.accounts.window;w.nonce=params.nonce;w.mint_bump=ctx.bumps.mint;w.launcher_bump=ctx.bumps.launcher;w.global=ctx.accounts.global.key();w.platform=ctx.accounts.platform.key();w.fee_owner=ctx.accounts.config.fee_owner;w.global_hash=global_hash;w.platform_hash=platform_hash;w.name=params.name;w.symbol=params.symbol;w.uri=params.uri;w.wallet_age=params.wallet_age;w.history=params.history;w.creator=ctx.accounts.creator.key();w.mint=ctx.accounts.mint.key();w.start=now;w.end=now+params.duration;w.min_target=params.min_target;w.max_raise=params.max_raise;w.window_tokens=0;w.creator_buy=params.creator_buy;w.creator_buy_tokens=0;w.dev_claimed=false;w.creator_refunded=false;w.creator_tokens=params.creator_tokens;w.vest_at=now+(params.lock_days as i64)*86400;w.created_at=now;w.bump=ctx.bumps.window;w.state=OPEN;
+  let w=&mut ctx.accounts.window;w.nonce=params.nonce;w.mint_bump=ctx.bumps.mint;w.launcher_bump=ctx.bumps.launcher;w.global=ctx.accounts.global.key();w.platform=ctx.accounts.platform.key();w.fee_owner=ctx.accounts.config.fee_owner;w.global_hash=global_hash;w.platform_hash=platform_hash;w.name=params.name;w.symbol=params.symbol;w.uri=params.uri;w.wallet_age=params.wallet_age;w.history=params.history;w.creator=ctx.accounts.creator.key();w.mint=ctx.accounts.mint.key();w.start=now;w.end=now+params.duration;w.min_target=params.min_target;w.max_raise=params.max_raise;w.window_tokens=0;w.creator_buy=params.creator_buy;w.creator_buy_tokens=0;w.dev_claimed=false;w.creator_refunded=false;w.creator_tokens=0;w.vested_claimed=true;w.vest_at=now+(params.lock_days as i64)*86400;w.created_at=now;w.bump=ctx.bumps.window;w.state=OPEN;
   for (to,amount) in [(ctx.accounts.launcher.to_account_info(),RESERVE),(ctx.accounts.treasury.to_account_info(),CREATE_FEE)]{anchor_lang::system_program::transfer(CpiContext::new(ctx.accounts.system_program.to_account_info(),anchor_lang::system_program::Transfer{from:ctx.accounts.creator.to_account_info(),to}),amount)?;}
   emit!(WindowCreated{window:w.key(),creator:w.creator,mint:w.mint,end:w.end});Ok(())
  }
@@ -87,7 +86,6 @@ pub mod floof_escrow {
  }
  pub fn settle_launch(ctx:Context<SettleLaunch>)->Result<()>{launchlab::settle(ctx)}
  pub fn claim_reserve(ctx:Context<ClaimReserve>)->Result<()>{launchlab::reserve(ctx)}
- pub fn claim_vested(ctx:Context<ClaimNativeVested>)->Result<()>{launchlab::vested(ctx)}
  pub fn claim_creator_fees(ctx:Context<ClaimCreatorFees>)->Result<()>{launchlab::fees(ctx)}
  /// A failed window never spent the creator's first-buy deposit: the creator takes it back.
  pub fn refund_creator_buy(ctx:Context<CreatorWindow>)->Result<()>{let w=&mut ctx.accounts.window;require!(w.state==REFUNDING&&w.creator_buy>0&&!w.creator_refunded,ErrCode::State);w.creator_refunded=true;let amount=w.creator_buy;move_lamports(&w.to_account_info(),&ctx.accounts.creator.to_account_info(),amount)}
@@ -145,10 +143,11 @@ pub mod floof_escrow {
  #[account(mut,token::authority=creator,token::mint=window.mint)]pub destination:Account<'info,TokenAccount>,pub token_program:Program<'info,Token>
 }
 #[account]#[derive(InitSpace)]pub struct Config{pub global:Pubkey,pub platform:Pubkey,pub fee_owner:Pubkey,pub authority:Pubkey,pub attestor:Pubkey,pub oracle_a:Pubkey,pub oracle_b:Pubkey,pub paused:bool,pub bump:u8}
-#[account]#[derive(InitSpace)]pub struct Window{pub creator:Pubkey,pub mint:Pubkey,pub start:i64,pub end:i64,pub created_at:i64,pub min_target:u64,pub max_raise:u64,pub window_tokens:u64,pub creator_tokens:u64,pub vest_at:i64,pub pledged:u64,pub raised:u64,pub state:u8,pub vested_claimed:bool,pub bump:u8,pub nonce:u64,pub mint_bump:u8,pub launcher_bump:u8,pub global:Pubkey,pub platform:Pubkey,pub fee_owner:Pubkey,pub global_hash:[u8;32],pub platform_hash:[u8;32],pub pool:Pubkey,pub fundraising_target:u64,#[max_len(32)]pub name:String,#[max_len(10)]pub symbol:String,#[max_len(200)]pub uri:String,pub wallet_age:bool,pub history:bool,pub creator_buy:u64,pub creator_buy_tokens:u64,pub dev_claimed:bool,pub creator_refunded:bool}
+#[account]#[derive(InitSpace)]pub struct Window{pub creator:Pubkey,pub mint:Pubkey,pub start:i64,pub end:i64,pub created_at:i64,pub min_target:u64,pub max_raise:u64,pub window_tokens:u64,/// Legacy (creator allocation removed): always 0 for new windows; kept for a stable account layout.
+pub creator_tokens:u64,pub vest_at:i64,pub pledged:u64,pub raised:u64,pub state:u8,pub vested_claimed:bool,pub bump:u8,pub nonce:u64,pub mint_bump:u8,pub launcher_bump:u8,pub global:Pubkey,pub platform:Pubkey,pub fee_owner:Pubkey,pub global_hash:[u8;32],pub platform_hash:[u8;32],pub pool:Pubkey,pub fundraising_target:u64,#[max_len(32)]pub name:String,#[max_len(10)]pub symbol:String,#[max_len(200)]pub uri:String,pub wallet_age:bool,pub history:bool,pub creator_buy:u64,pub creator_buy_tokens:u64,pub dev_claimed:bool,pub creator_refunded:bool}
 #[account]#[derive(InitSpace)]pub struct Pledge{pub window:Pubkey,pub wallet:Pubkey,pub cluster:[u8;32],pub amount:u64,pub first_at:i64,pub claimed:bool,pub slash_claimed:bool,pub bump:u8}
 #[account]#[derive(InitSpace)]pub struct ClusterCap{pub window:Pubkey,pub cluster:[u8;32],pub amount:u64,pub bump:u8}
-#[derive(AnchorSerialize,AnchorDeserialize,Clone)]pub struct CreateParams{pub nonce:u64,pub name:String,pub symbol:String,pub uri:String,pub wallet_age:bool,pub history:bool,pub duration:i64,pub min_target:u64,pub max_raise:u64,pub creator_buy:u64,pub creator_tokens:u64,pub lock_days:u16}
+#[derive(AnchorSerialize,AnchorDeserialize,Clone)]pub struct CreateParams{pub nonce:u64,pub name:String,pub symbol:String,pub uri:String,pub wallet_age:bool,pub history:bool,pub duration:i64,pub min_target:u64,pub max_raise:u64,pub creator_buy:u64,pub lock_days:u16}
 #[derive(Debug,PartialEq)]pub struct Allocation{pub filled:u64,pub refund:u64,pub tokens:u64}
 pub fn mul_div(a:u64,b:u64,d:u64)->Result<u64>{require!(d>0,ErrCode::Amount);u64::try_from((a as u128)*(b as u128)/(d as u128)).map_err(|_|error!(ErrCode::Overflow))}
 pub fn mul_div_up(a:u64,b:u64,d:u64)->Result<u64>{require!(d>0,ErrCode::Amount);u64::try_from(((a as u128)*(b as u128)).div_ceil(d as u128)).map_err(|_|error!(ErrCode::Overflow))}

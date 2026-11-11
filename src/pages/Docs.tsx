@@ -16,7 +16,7 @@ const FAQ = [
   ['Why can’t snipers get in?', 'The pool is created and the window’s first buy executes in the same instruction, so nobody can trade before the presale. Being faster changes nothing.'],
   ['What’s the clearing price?', 'The average price of the combined first buy (presale + creator buy) on the standard LaunchLab curve. Everyone in the window — creator included — pays the same price. The Create page shows it live for any raise.'],
   ['What is TRUTH?', 'An indexer that clusters wallets by funding source and behaviour to estimate the share of real buyers vs sybils, bundles and wash trades, graded A+ to D.'],
-  ['Can the creator rug?', 'The creator buys at the same clearing price as everyone else, and can lock the dev buy and creator allocation on-chain (up to 365 days) — the lock length is shown on every coin. Floof cannot stop a creator from selling unlocked tokens; check the lock and TRUTH grade before you pledge.'],
+  ['Can the creator rug?', 'The creator buys at the same clearing price as everyone else, and can lock the dev buy on-chain (up to 365 days); there is no separate creator allocation — the lock length is shown on every coin. Floof cannot stop a creator from selling unlocked tokens; check the lock and TRUTH grade before you pledge.'],
   ['Is this live?', 'This deployment runs on Solana Devnet with test SOL only. No mainnet funds are involved.'],
 ]
 export default function Docs() {
