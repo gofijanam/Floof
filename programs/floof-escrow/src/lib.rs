@@ -5,7 +5,11 @@ use anchor_lang::prelude::*;
 use anchor_lang::solana_program::{sysvar::instructions::{load_current_index_checked,load_instruction_at_checked}};
 use anchor_spl::token::{self,Mint,Token,TokenAccount,Transfer};
 // Build-only identifier. Generate a deployment keypair and synchronize before any deployment.
+#[cfg(not(feature="staging"))]
 declare_id!("7hhrC7N6FRQyQLUbr4q9q5Dgqgj8zoDtDCiCd8m1XX3N");
+// Separate Devnet staging deployment of the standard-curve program (never upgrades the live one).
+#[cfg(feature="staging")]
+declare_id!("BkDkWmDua6E1zKQ5GrdAu6WkLbkv8G4AAXhpGJRaUD2K");
 const SUPPLY:u64=1_000_000_000_000_000;
 const OPEN:u8=0; const LIVE:u8=1; const REFUNDING:u8=2;
 mod compensation;
