@@ -4,6 +4,7 @@ import { Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import Lenis from 'lenis'
 import { Nav, MobileDock } from './components/Nav'
 import { Toasts } from './components/Toasts'
+import { CandyField } from './components/CandyField'
 import { Preloader } from './components/Preloader'
 import { Footer } from './components/Footer'
 import { startSim, useStore, closePoof, refresh } from './lib/store'
@@ -45,10 +46,11 @@ export default function App() {
     return () => { cancelAnimationFrame(raf); lenis?.destroy(); lenis = null }
   }, [])
   useEffect(() => { lenis ? lenis.scrollTo(0, { immediate: true }) : window.scrollTo(0, 0) }, [loc.pathname])
+  const isApp = loc.pathname !== '/'
   return (
     <MotionConfig reducedMotion="user">
       <LayoutGroup>
-        <div className="bg-aurora" /><div className="bg-stars" /><div className="grain" />
+        <div className="bg-aurora" /><div className="bg-stars" /><CandyField calm={isApp} /><div className="grain" />
         {!loaded && <Preloader onDone={done} />}
         <Nav />
         <PoofWatcher />

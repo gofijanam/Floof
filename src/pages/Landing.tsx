@@ -1,7 +1,7 @@
-import { AnimatePresence, motion, useMotionValue, useMotionValueEvent, useScroll, useSpring, useTransform } from 'framer-motion'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { AnimatePresence, motion, useMotionValue, useMotionValueEvent, useScroll, useSpring, useTransform, useReducedMotion } from 'framer-motion'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { HeroWindow } from '../components/HeroWindow'
+import type { MochiHandle } from '../components/Mochi3D'
 import { Magnetic, Countdown, MiniMeter, LiveDot, Num, Sparkline, SectionTitle, cx } from '../components/ui'
 import { CoinCard } from '../components/CoinCard'
 import { CoinAvatar } from '../components/CoinAvatar'
@@ -10,7 +10,9 @@ import { fmtPrice, mmss } from '../lib/format'
 import { maxRaise, FEES } from '../lib/mock'
 import { IArrow, IShield, IGhost, ICheck, IX, ISparkle, ILock, IUsers } from '../components/icons'
 import { confetti } from '../components/confetti'
+import { StoryStage, STORY_STEPS } from '../components/StoryStage'
 
+const Mochi3D = lazy(() => import('../components/Mochi3D').then((m) => ({ default: m.Mochi3D })))
 
 export default function Landing({ ready }: { ready: boolean }) {
   return (
@@ -34,6 +36,8 @@ function Hero({ ready }: { ready: boolean }) {
   const now = useStore((s) => s.now)
   const feed = useStore((s) => s.feed)
   const blocked = useStore((s) => s.stats.snipersBlocked)
+  const mochi = useRef<MochiHandle>(null)
+  const reduced = useReducedMotion()
   // parallax for HUD widgets
   const mx = useMotionValue(0), my = useMotionValue(0)
   const sx = useSpring(mx, { stiffness: 60, damping: 20 }), sy = useSpring(my, { stiffness: 60, damping: 20 })
@@ -43,6 +47,23 @@ function Hero({ ready }: { ready: boolean }) {
     const f = (e: PointerEvent) => { mx.set(e.clientX / innerWidth - 0.5); my.set(e.clientY / innerHeight - 0.5) }
     addEventListener('pointermove', f, { passive: true }); return () => removeEventListener('pointermove', f)
   }, [mx, my])
+  // demo countdown → POOF loop above the mochi's head
+  const [demo, setDemo] = useState(10)
+  const [poofed, setPoofed] = useState(false)
+  const stage = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (!ready) return
+    const t = setInterval(() => setDemo((d) => (d <= 0 ? 0 : d - 1)), 1000)
+    return () => clearInterval(t)
+  }, [ready])
+  useEffect(() => {
+    if (demo !== 0 || poofed) return
+    setPoofed(true); mochi.current?.puff()
+    const r = stage.current?.getBoundingClientRect()
+    if (r && !reduced) setTimeout(() => confetti({ x: r.left + r.width / 2, y: r.top + r.height * 0.45, n: 70, power: 0.8 }), 180)
+    const t = setTimeout(() => { setPoofed(false); setDemo(10) }, 3200)
+    return () => clearTimeout(t)
+  }, [demo, poofed, reduced])
   const cap = floof ? maxRaise(floof) : 0
   const recent = feed.filter((f) => f.coin === floof?.id && f.kind === 'pledge').slice(0, 1)[0]
   const spark = useMemo(() => Array.from({ length: 24 }, (_, i) => 20 + i * 2 + Math.sin(i * 1.3) * 6), [])
@@ -84,8 +105,25 @@ function Hero({ ready }: { ready: boolean }) {
         </div>
 
         {/* 3D stage + HUD */}
-        <div className="relative h-[min(100vw,440px)] [grid-area:stage] lg:h-[min(86svh,760px)]">
-          <HeroWindow live={!!active} start={floof?.windowStart} end={floof?.windowEnd} now={now} px={p1x} py={p1y} />
+        <div ref={stage} className="relative h-[min(100vw,440px)] [grid-area:stage] lg:h-[min(86svh,760px)]">
+          <div className="absolute inset-[-10%] rounded-full opacity-70 blur-3xl" style={{ background: 'radial-gradient(circle at 50% 55%, rgba(95,212,255,.28), rgba(182,156,255,.12) 40%, transparent 65%)' }} />
+          <Suspense fallback={<img src="./mochi/idle.webp" alt="" className="absolute left-1/2 top-1/2 w-1/2 -translate-x-1/2 -translate-y-1/2" />}>
+            <Mochi3D ref={mochi} className="absolute inset-0" />
+          </Suspense>
+          {/* countdown chip above head */}
+          <div className="pointer-events-none absolute left-[22%] top-[8%] z-20 -translate-x-1/2 lg:left-1/2 lg:top-[19%]">
+            <AnimatePresence mode="wait">
+              {!poofed ? (
+                <motion.div key="cd" initial={{ scale: 0.6, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 1.6, opacity: 0 }} className={cx('rounded-full border-2 bg-night/80 px-3 py-0.5 font-num text-lg font-semibold tnum', demo <= 3 ? 'border-pink text-pink anim-shiver' : 'border-pink/60 text-cream')}>
+                  0:{String(demo).padStart(2, '0')}
+                </motion.div>
+              ) : (
+                <motion.div key="poof" initial={{ scale: 0.2, rotate: -12, opacity: 0 }} animate={{ scale: 1, rotate: -6, opacity: 1 }} exit={{ opacity: 0, y: -20 }} transition={{ type: 'spring', stiffness: 400, damping: 10 }}
+                  className="h-display text-6xl text-cream md:text-7xl" style={{ WebkitTextStroke: '3px #FF5FB8', textShadow: '0 6px 0 #B69CFF, 0 0 40px rgba(255,95,184,.8)' }}>POOF!</motion.div>
+              )}
+            </AnimatePresence>
+          </div>
+          {poofed && !reduced && <Rays />}
           {/* HUD widgets */}
           <motion.div style={{ x: p1x, y: p1y }} className="absolute left-0 top-[4%] z-10 hidden w-[46%] max-w-[230px] md:block lg:left-[0%] lg:top-[10%]">
             <div className="glass neon-b anim-floaty rounded-2xl p-3 md:p-4">
@@ -133,6 +171,14 @@ function Hero({ ready }: { ready: boolean }) {
   )
 }
 
+function Rays() {
+  return (
+    <motion.div initial={{ opacity: 0, scale: 0.6 }} animate={{ opacity: [0, 1, 0], scale: [0.6, 1.3, 1.5] }} transition={{ duration: 1.4 }} className="pointer-events-none absolute left-1/2 top-[48%] h-[130%] w-[130%] -translate-x-1/2 -translate-y-1/2"
+      style={{ background: 'repeating-conic-gradient(from 0deg, rgba(255,95,184,.35) 0 5deg, transparent 5deg 20deg, rgba(95,212,255,.3) 20deg 25deg, transparent 25deg 40deg)', maskImage: 'radial-gradient(circle, #000 15%, transparent 60%)', WebkitMaskImage: 'radial-gradient(circle, #000 15%, transparent 60%)' }} />
+  )
+}
+
+/* ------------------------------------------------------------------ MARQUEE */
 function Marquee() {
   const coins = useStore((s) => s.coins)
   const items = [...coins, ...coins]
@@ -153,111 +199,46 @@ function Marquee() {
 }
 
 /* ------------------------------------------------------------------ SCROLL STORY (pinned) */
-const BEATS = [
-  { k: '01', t: 'Floofs gather.', d: 'A 5–60 minute fair window opens the moment a coin is created. Everyone pledges SOL into one escrow cloud — max 1% per wallet, anti-sybil checks on every pledge.' },
-  { k: '02', t: 'One cloud. One price.', d: 'No one buys early. At zero, the cloud settles: hit the min target or everyone is auto-refunded. Oversubscribed? Everyone fills pro-rata.' },
-  { k: '03', t: 'POOF! A coin is born.', d: 'Every pledger buys together, at one price, in one block. Snipers and bundlers are locked outside. Then trading opens on a Raydium LaunchLab curve → graduates to CPMM.' },
-]
 function Story() {
   const ref = useRef<HTMLDivElement>(null)
+  const reduced = useReducedMotion()
   const { scrollYProgress } = useScroll({ target: ref, offset: ['start start', 'end end'] })
+  // springy scrub for a choreographed feel; raw progress when the user prefers reduced motion
+  const smooth = useSpring(scrollYProgress, { stiffness: 140, damping: 32, restDelta: 0.0005 })
+  const src = reduced ? scrollYProgress : smooth
   const [p, setP] = useState(0)
-  useMotionValueEvent(scrollYProgress, 'change', (v) => setP(v))
-  const beat = p < 0.36 ? 0 : p < 0.68 ? 1 : 2
-  const prog = useSpring(scrollYProgress, { stiffness: 120, damping: 30 })
+  useMotionValueEvent(src, 'change', (v) => setP(v))
+  const n = STORY_STEPS.length
+  const step = Math.min(n - 1, Math.floor(p * n))
   return (
-    <section ref={ref} className="relative h-[340vh]" aria-label="How a fair launch works">
+    <section ref={ref} className="relative h-[420vh]" aria-label="How a fair launch works">
       <div className="sticky top-0 flex h-[100svh] items-center overflow-hidden">
-        <div className="mx-auto grid w-full max-w-[1400px] grid-cols-1 items-center gap-4 px-4 md:px-6 lg:grid-cols-[0.8fr_1.2fr]">
+        <div className="mx-auto grid w-full max-w-[1400px] grid-cols-1 items-center gap-6 px-4 md:px-6 lg:grid-cols-[0.75fr_1.25fr] lg:gap-10">
           <div className="relative z-10 order-2 lg:order-1">
-            <div className="mb-6 flex gap-2">
-              {BEATS.map((b, i) => (
-                <div key={b.k} className="h-1.5 flex-1 overflow-hidden rounded-full bg-lav/15">
-                  <motion.div className="h-full rounded-full bg-gradient-to-r from-blue to-pink" style={{ scaleX: useTransform(prog, [i / 3, (i + 1) / 3], [0, 1]), transformOrigin: 'left' }} />
-                </div>
-              ))}
-            </div>
-            <AnimatePresence mode="wait">
-              <motion.div key={beat} initial={{ opacity: 0, y: 30, filter: 'blur(8px)' }} animate={{ opacity: 1, y: 0, filter: 'blur(0px)' }} exit={{ opacity: 0, y: -20, filter: 'blur(8px)' }} transition={{ duration: 0.4 }}>
-                <div className="font-num text-sm font-semibold tracking-[.3em] text-blue">BEAT {BEATS[beat].k}</div>
-                <h2 className={cx('h-display mt-2 text-5xl md:text-7xl', beat === 2 && 'text-candy')}>{BEATS[beat].t}</h2>
-                <p className="mt-4 max-w-md text-base font-semibold text-lav md:text-lg">{BEATS[beat].d}</p>
-              </motion.div>
-            </AnimatePresence>
+            <div className="font-num text-xs font-semibold tracking-[.3em] text-blue">HOW A FAIR LAUNCH WORKS</div>
+            <ol className="mt-5 space-y-1">
+              {STORY_STEPS.map((s, i) => {
+                const local = Math.min(1, Math.max(0, p * n - i))
+                const on = i === step
+                return (
+                  <li key={s.t} className="relative pl-12">
+                    <span className={cx('absolute left-0 top-1 grid h-8 w-8 place-items-center rounded-full font-num text-xs font-semibold transition-colors duration-300', i < step ? 'bg-lav/20 text-cream' : on ? 'bg-cream text-night' : 'bg-lav/10 text-lav/60')}>{String(i + 1).padStart(2, '0')}</span>
+                    {i < n - 1 && <span className="absolute left-[15px] top-10 h-[calc(100%-2rem)] w-[2px] overflow-hidden rounded-full bg-lav/10"><span className="block h-full w-full origin-top bg-gradient-to-b from-blue to-pink" style={{ transform: `scaleY(${local})` }} /></span>}
+                    <div className={cx('pb-3 pt-1.5 transition-opacity duration-300', on ? 'opacity-100' : 'opacity-45')}>
+                      <h3 className={cx('h-display text-2xl md:text-3xl', on && i === n - 1 && 'text-candy')}>{s.t}</h3>
+                      <div className="grid transition-[grid-template-rows] duration-500 ease-out" style={{ gridTemplateRows: on ? '1fr' : '0fr' }}>
+                        <p className="overflow-hidden text-sm font-semibold text-lav md:text-base"><span className="block max-w-md pt-2">{s.d}</span></p>
+                      </div>
+                    </div>
+                  </li>
+                )
+              })}
+            </ol>
           </div>
-          <div className="order-1 lg:order-2"><StoryScene p={p} /></div>
+          <div className="order-1 lg:order-2"><StoryStage p={p} /></div>
         </div>
       </div>
     </section>
-  )
-}
-
-function StoryScene({ p }: { p: number }) {
-  const floofs = useMemo(() => Array.from({ length: 34 }, (_, i) => {
-    const a = (i / 34) * Math.PI * 2 + (i % 3) * 0.4, r = 290 + (i % 5) * 26
-    return { sx: 400 + Math.cos(a) * r * 1.25, sy: 250 + Math.sin(a) * r * 0.72, ex: 400 + Math.cos(a * 3) * (40 + (i % 6) * 18), ey: 262 + Math.sin(a * 3) * (24 + (i % 4) * 12), hue: [205, 330, 275, 180, 50][i % 5], d: (i % 7) * 0.02 }
-  }), [])
-  const e = (x: number) => (x < 0 ? 0 : x > 1 ? 1 : 1 - Math.pow(1 - x, 3))
-  const g = e((p - 0.02) / 0.3) // gather
-  const merge = e((p - 0.36) / 0.26) // one cloud
-  const boom = e((p - 0.68) / 0.12) // poof
-  const ms = Math.max(0, (1 - Math.min(1, p / 0.66)) * 600000)
-  return (
-    <div className="relative mx-auto aspect-[8/5] w-full max-w-[820px]">
-      <svg viewBox="0 0 800 500" className="h-full w-full overflow-visible">
-        <defs>
-          <radialGradient id="sc-cloud" cx="45%" cy="35%" r="70%"><stop offset="0" stopColor="#E6FBFF" /><stop offset=".5" stopColor="#B69CFF" /><stop offset="1" stopColor="#FF5FB8" /></radialGradient>
-          <radialGradient id="sc-glow"><stop offset="0" stopColor="#FF5FB8" stopOpacity=".55" /><stop offset="1" stopColor="#FF5FB8" stopOpacity="0" /></radialGradient>
-        </defs>
-        <circle cx="400" cy="260" r={180 + boom * 120} fill="url(#sc-glow)" opacity={0.3 + merge * 0.5} />
-        {/* shield ring in beat 3 */}
-        <circle cx="400" cy="260" r="200" fill="none" stroke="#7CF5C8" strokeWidth="3" strokeDasharray="8 10" opacity={boom} className="anim-dash" />
-        {/* escrow cloud grows */}
-        <g transform={`translate(400 262) scale(${(0.35 + merge * 0.75) * (1 - boom * 0.9)})`} opacity={g * (1 - boom)}>
-          {[[-90, 10, 80], [-20, -40, 100], [70, -20, 85], [120, 30, 60], [10, 40, 105], [-140, 40, 50]].map(([x, y, r], i) => <circle key={i} cx={x} cy={y} r={r} fill="url(#sc-cloud)" opacity=".92" />)}
-        </g>
-        {/* floofs */}
-        {floofs.map((f, i) => {
-          const k = e((g - f.d) / (1 - f.d))
-          const x = f.sx + (f.ex - f.sx) * k, y = f.sy + (f.ey - f.sy) * k
-          const s = (1 - merge * 0.85) * (1 - boom)
-          return (
-            <g key={i} transform={`translate(${x} ${y}) scale(${0.55 * s + 0.0001})`} opacity={1 - merge * 0.6}>
-              <ellipse cx="-14" cy="-20" rx="8" ry="7" fill={`hsl(${f.hue} 95% 78%)`} /><ellipse cx="14" cy="-20" rx="8" ry="7" fill={`hsl(${f.hue} 95% 78%)`} />
-              <ellipse rx="30" ry="24" fill={`hsl(${f.hue} 95% 76%)`} /><ellipse cx="-8" cy="-2" rx="3.5" ry="4.5" fill="#1B0E2C" /><ellipse cx="8" cy="-2" rx="3.5" ry="4.5" fill="#1B0E2C" />
-            </g>
-          )
-        })}
-        {/* snipers bouncing off the shield */}
-        {[[90, 90], [710, 110], [70, 420], [730, 410], [400, 30]].map(([x, y], i) => (
-          <g key={i} transform={`translate(${x + (400 - x) * 0.18 * Math.sin(p * 40 + i) * boom} ${y + (260 - y) * 0.18 * Math.sin(p * 40 + i) * boom})`} opacity={boom}>
-            <path d="M-16 18 V-2 a16 16 0 0 1 32 0 V18 l-5.5 -4 -5 4 -5 -4 -5 4 -5.5 -4z" fill="#FF6B8B" opacity=".9" />
-            <circle cx="-6" cy="-2" r="2.6" fill="#0E0818" /><circle cx="6" cy="-2" r="2.6" fill="#0E0818" />
-            <text y="40" textAnchor="middle" className="fill-danger font-num text-[12px] font-semibold">sniper</text>
-          </g>
-        ))}
-      </svg>
-      {/* timer + price HUD */}
-      <div className="pointer-events-none absolute inset-x-0 top-0 flex justify-center">
-        <div className={cx('glass rounded-2xl px-5 py-2 text-center transition-opacity', boom > 0.1 ? 'opacity-0' : 'opacity-100')}>
-          <div className="label">fair window</div>
-          <Countdown ms={ms} size="lg" urgent={ms < 60000} />
-        </div>
-      </div>
-      <div className="pointer-events-none absolute bottom-[4%] left-1/2 -translate-x-1/2" style={{ opacity: merge * (1 - boom), transform: `translate(-50%, ${(1 - merge) * 20}px)` }}>
-        <div className="glass neon-p rounded-full px-5 py-2 text-center font-extrabold"><span className="text-lav">one price for everyone</span> <span className="font-num text-pink tnum">0.0₆400 SOL</span></div>
-      </div>
-      {/* POOF coin born */}
-      <div className="pointer-events-none absolute inset-0 grid place-items-center" style={{ opacity: boom }}>
-        <div style={{ transform: `scale(${0.5 + boom * 0.6}) rotate(${(1 - boom) * -20}deg)` }} className="relative">
-          <img src="./mochi/puffed.webp" alt="POOF!" className="w-[380px] max-w-[64vw]" />
-        </div>
-      </div>
-      <div className="pointer-events-none absolute bottom-0 left-1/2 flex -translate-x-1/2 gap-2" style={{ opacity: boom }}>
-        <span className="chip text-mint"><ICheck s={14} /> 412 buyers · 1 block</span>
-        <span className="chip text-danger"><IX s={14} /> 37 snipers locked out</span>
-      </div>
-    </div>
   )
 }
 

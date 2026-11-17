@@ -55,7 +55,7 @@ body { position: relative; @apply bg-night text-cream font-body antialiased; ove
   radial-gradient(35% 30% at 85% 15%, rgba(95,212,255,.16), transparent 70%),
   radial-gradient(45% 40% at 50% 100%, rgba(182,156,255,.16), transparent 70%);
   animation: auroraDrift 22s ease-in-out infinite alternate; }
-.bg-stars { position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity:.22;
+.bg-stars { position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity:.55;
   background-image: radial-gradient(1.2px 1.2px at 20% 30%, #fff 50%, transparent 51%), radial-gradient(1px 1px at 70% 80%, #B69CFF 50%, transparent 51%), radial-gradient(1.4px 1.4px at 40% 70%, #5FD4FF 50%, transparent 51%), radial-gradient(1px 1px at 85% 40%, #FF5FB8 50%, transparent 51%), radial-gradient(1px 1px at 55% 15%, #fff 50%, transparent 51%);
   background-size: 380px 380px, 520px 520px, 610px 610px, 450px 450px, 300px 300px; animation: twinkle 6s ease-in-out infinite alternate; }
 .grain { position: fixed; inset: 0; z-index: 1; pointer-events:none; opacity:.05; mix-blend-mode: overlay;
@@ -139,17 +139,3 @@ button:disabled, [aria-disabled=true], input:disabled, select:disabled, [role=op
 .fr-range:active::-webkit-slider-thumb { transform: scale(1.12); }
 .fr-range:focus-visible { outline-offset: 4px; border-radius: 999px; }
 .fr-range:disabled { opacity: .45; }
-
-/* ---------- hero: Mochi + fair-window ring (transform/opacity only) ---------- */
-.hw-glow { background: radial-gradient(closest-side, rgba(95,212,255,.20), rgba(182,156,255,.10) 55%, transparent 100%); animation: hwGlow 7s ease-in-out infinite alternate; will-change: opacity, transform; }
-@keyframes hwGlow { from { opacity: .7; transform: translate(-50%,-50%) scale(.97) } to { opacity: 1; transform: translate(-50%,-50%) scale(1.03) } }
-.hw-mote { animation-name: hwMote; animation-timing-function: ease-in-out; animation-iteration-count: infinite; will-change: transform, opacity; }
-@keyframes hwMote { 0% { transform: translate3d(0,0,0); opacity: 0 } 20% { opacity: .55 } 80% { opacity: .35 } 100% { transform: translate3d(6px,-46px,0); opacity: 0 } }
-.hw-sheen { background: conic-gradient(from 0deg, transparent 0 78%, rgba(255,244,251,.0) 80%, rgba(255,244,251,.22) 86%, transparent 92%); -webkit-mask: radial-gradient(closest-side, transparent calc(100% - 3px), #000 calc(100% - 2px), #000 100%, transparent 100%); mask: radial-gradient(closest-side, transparent calc(100% - 3px), #000 calc(100% - 2px), #000 100%, transparent 100%); transform: scale(.94); animation: hwSpin 16s linear infinite; }
-@keyframes hwSpin { from { transform: scale(.94) rotate(0) } to { transform: scale(.94) rotate(360deg) } }
-.hw-float { animation: hwFloat 6s ease-in-out infinite; will-change: transform; }
-@keyframes hwFloat { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-8px) } }
-.hw-breathe { animation: hwBreathe 4s ease-in-out infinite; transform-origin: 50% 88%; }
-@keyframes hwBreathe { 0%,100% { transform: scale(1,1) } 50% { transform: scale(1.018,.986) } }
-.hw-shadow { animation: hwShadow 6s ease-in-out infinite; }
-@keyframes hwShadow { 0%,100% { transform: scaleX(1); opacity: .7 } 50% { transform: scaleX(.9); opacity: .5 } }
