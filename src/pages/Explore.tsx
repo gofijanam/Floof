@@ -54,7 +54,7 @@ export default function Explore() {
       </div>
 
       {/* controls */}
-      <div className="glass mt-6 flex flex-col gap-3 rounded-3xl p-3 lg:flex-row lg:items-center" data-cursor="native">
+      <div className="glass mt-6 flex flex-col gap-3 rounded-3xl p-3 lg:flex-row lg:items-center">
         <div className="-mx-1 overflow-x-auto px-1"><Tabs id="explore" value={tab} onChange={setTab} items={[{ v: 'open', label: 'Open window', count: counts.open }, { v: 'upcoming', label: 'Upcoming', count: counts.upcoming }, { v: 'curve', label: 'On curve', count: counts.curve }, { v: 'graduated', label: 'Graduated', count: counts.graduated }]} /></div>
         <div className="relative flex-1">
           <IExplore s={16} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-lav/60" />
@@ -69,7 +69,7 @@ export default function Explore() {
           </div>
         </div>
       </div>
-      <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-3 px-1 text-xs font-extrabold text-lav" data-cursor="native">
+      <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-3 px-1 text-xs font-extrabold text-lav">
         <span className="flex items-center gap-1.5"><IFilter s={14} /> Filters</span>
         <div className="flex items-center gap-1.5">
           <span>TRUTH ≥</span>
@@ -103,7 +103,7 @@ export default function Explore() {
 function ListView({ list, now }: { list: Coin[]; now: number }) {
   const nav = useNavigate()
   return (
-    <div className="glass overflow-x-auto rounded-3xl" data-cursor="native">
+    <div className="glass overflow-x-auto rounded-3xl">
       <table className="w-full min-w-[860px] text-sm">
         <thead><tr className="text-left text-[11px] font-black uppercase tracking-wider text-lav/70">
           {['Coin', 'Status', 'Escrow / Mcap', 'Ceiling / Price', 'Progress', 'TRUTH', 'Creator', 'Dev lock'].map((h) => <th key={h} className="px-4 py-3 font-black">{h}</th>)}

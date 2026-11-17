@@ -39,7 +39,7 @@ body { position: relative; @apply bg-night text-cream font-body antialiased; ove
   .chip { @apply inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-extrabold; background: rgba(182,156,255,.1); border: 1px solid rgba(182,156,255,.2); }
   .label { @apply text-[11px] font-extrabold uppercase tracking-[.14em] text-lav/80; }
   .input { @apply w-full rounded-2xl bg-night/70 px-4 py-3 font-bold text-cream outline-none placeholder:text-lav/40 transition; border: 1px solid rgba(182,156,255,.2); }
-  .input:focus { border-color: rgba(255,95,184,.7); box-shadow: 0 0 0 4px rgba(255,95,184,.15); }
+  .input:focus { border-color: rgba(255,140,203,.45); box-shadow: 0 0 0 3px rgba(255,95,184,.10); }
   .h-display { @apply font-display font-extrabold leading-[.92] tracking-tight; }
   .text-candy { background: linear-gradient(90deg,#FF8CCB,#FF5FB8 30%,#B69CFF 60%,#5FD4FF); -webkit-background-clip: text; background-clip: text; color: transparent; }
   .text-ice { background: linear-gradient(180deg,#E6FBFF,#5FD4FF); -webkit-background-clip: text; background-clip: text; color: transparent; }
@@ -55,7 +55,7 @@ body { position: relative; @apply bg-night text-cream font-body antialiased; ove
   radial-gradient(35% 30% at 85% 15%, rgba(95,212,255,.16), transparent 70%),
   radial-gradient(45% 40% at 50% 100%, rgba(182,156,255,.16), transparent 70%);
   animation: auroraDrift 22s ease-in-out infinite alternate; }
-.bg-stars { position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity:.55;
+.bg-stars { position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity:.22;
   background-image: radial-gradient(1.2px 1.2px at 20% 30%, #fff 50%, transparent 51%), radial-gradient(1px 1px at 70% 80%, #B69CFF 50%, transparent 51%), radial-gradient(1.4px 1.4px at 40% 70%, #5FD4FF 50%, transparent 51%), radial-gradient(1px 1px at 85% 40%, #FF5FB8 50%, transparent 51%), radial-gradient(1px 1px at 55% 15%, #fff 50%, transparent 51%);
   background-size: 380px 380px, 520px 520px, 610px 610px, 450px 450px, 300px 300px; animation: twinkle 6s ease-in-out infinite alternate; }
 .grain { position: fixed; inset: 0; z-index: 1; pointer-events:none; opacity:.05; mix-blend-mode: overlay;
@@ -111,13 +111,16 @@ body { position: relative; @apply bg-night text-cream font-body antialiased; ove
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; scroll-behavior: auto !important; }
 }
-@keyframes eqBar { 0% { transform: scaleY(.3) } 100% { transform: scaleY(1) } }
-/* custom cursor */
-@media (pointer: fine) {
-  html.has-cursor, html.has-cursor a, html.has-cursor button, html.has-cursor [role=button], html.has-cursor label { cursor: none; }
-  html.has-cursor [data-cursor=native], html.has-cursor [data-cursor=native] *, html.has-cursor input, html.has-cursor textarea, html.has-cursor select { cursor: auto; }
-  html.has-cursor [data-cursor=native] a, html.has-cursor [data-cursor=native] button { cursor: pointer; }
-}
+/* native cursor: pointer hand on everything clickable, not-allowed when disabled */
+a[href], button, summary, select, label[for], label:has(> input[type=checkbox]), label:has(> input[type=radio]),
+[role=button], [role=switch], [role=tab], [role=option], [role=menuitem], [role=checkbox], [role=radio], [role=link],
+input[type=checkbox], input[type=radio], input[type=range], input[type=file], input[type=color], input[type=submit], input[type=button], .clickable { cursor: pointer; }
+button:disabled, [aria-disabled=true], input:disabled, select:disabled, [role=option][aria-disabled=true], fieldset:disabled * { cursor: not-allowed; }
+/* focus: no ring on mouse/touch focus; a soft rounded on-brand ring for keyboard users only */
+:focus:not(:focus-visible) { outline: none; }
+:focus-visible { outline: 2px solid rgba(255,140,203,.7); outline-offset: 2px; }
+.input:focus-visible { outline: none; }
+[role=listbox]:focus-visible { outline-offset: -3px; }
 .hero-grid { grid-template-areas: "top" "stage" "bottom"; }
 @media (min-width: 1024px) { .hero-grid { grid-template-areas: "top stage" "bottom stage"; grid-template-rows: 1fr 1fr; } }
 @keyframes digitIn { 0% { transform: translateY(-30%) } 100% { transform: none } }
@@ -125,3 +128,28 @@ body { position: relative; @apply bg-night text-cream font-body antialiased; ove
 @keyframes colon { 0%,100% { opacity: 1 } 50% { opacity: .35 } }
 .anim-colon { animation: colon 1s steps(2, jump-none) infinite; }
 
+
+/* ---------- range slider: fixed 18px thumb so tick labels can be placed exactly under it ---------- */
+.fr-range { -webkit-appearance: none; appearance: none; height: 18px; background: transparent; --fill: calc(9px + var(--pct, 0) * (100% - 18px)); }
+.fr-range::-webkit-slider-runnable-track { height: 6px; border-radius: 999px; background: linear-gradient(90deg, var(--accent) 0 var(--fill), rgba(182,156,255,.18) var(--fill) 100%); }
+.fr-range::-moz-range-track { height: 6px; border-radius: 999px; background: rgba(182,156,255,.18); }
+.fr-range::-moz-range-progress { height: 6px; border-radius: 999px; background: var(--accent); }
+.fr-range::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 18px; margin-top: -6px; border-radius: 999px; background: #FFF4FB; border: 0; box-shadow: 0 0 0 3px var(--accent), 0 4px 14px -2px var(--accent); transition: transform .15s; }
+.fr-range::-moz-range-thumb { width: 18px; height: 18px; border-radius: 999px; background: #FFF4FB; border: 0; box-shadow: 0 0 0 3px var(--accent), 0 4px 14px -2px var(--accent); }
+.fr-range:active::-webkit-slider-thumb { transform: scale(1.12); }
+.fr-range:focus-visible { outline-offset: 4px; border-radius: 999px; }
+.fr-range:disabled { opacity: .45; }
+
+/* ---------- hero: Mochi + fair-window ring (transform/opacity only) ---------- */
+.hw-glow { background: radial-gradient(closest-side, rgba(95,212,255,.20), rgba(182,156,255,.10) 55%, transparent 100%); animation: hwGlow 7s ease-in-out infinite alternate; will-change: opacity, transform; }
+@keyframes hwGlow { from { opacity: .7; transform: translate(-50%,-50%) scale(.97) } to { opacity: 1; transform: translate(-50%,-50%) scale(1.03) } }
+.hw-mote { animation-name: hwMote; animation-timing-function: ease-in-out; animation-iteration-count: infinite; will-change: transform, opacity; }
+@keyframes hwMote { 0% { transform: translate3d(0,0,0); opacity: 0 } 20% { opacity: .55 } 80% { opacity: .35 } 100% { transform: translate3d(6px,-46px,0); opacity: 0 } }
+.hw-sheen { background: conic-gradient(from 0deg, transparent 0 78%, rgba(255,244,251,.0) 80%, rgba(255,244,251,.22) 86%, transparent 92%); -webkit-mask: radial-gradient(closest-side, transparent calc(100% - 3px), #000 calc(100% - 2px), #000 100%, transparent 100%); mask: radial-gradient(closest-side, transparent calc(100% - 3px), #000 calc(100% - 2px), #000 100%, transparent 100%); transform: scale(.94); animation: hwSpin 16s linear infinite; }
+@keyframes hwSpin { from { transform: scale(.94) rotate(0) } to { transform: scale(.94) rotate(360deg) } }
+.hw-float { animation: hwFloat 6s ease-in-out infinite; will-change: transform; }
+@keyframes hwFloat { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-8px) } }
+.hw-breathe { animation: hwBreathe 4s ease-in-out infinite; transform-origin: 50% 88%; }
+@keyframes hwBreathe { 0%,100% { transform: scale(1,1) } 50% { transform: scale(1.018,.986) } }
+.hw-shadow { animation: hwShadow 6s ease-in-out infinite; }
+@keyframes hwShadow { 0%,100% { transform: scaleX(1); opacity: .7 } 50% { transform: scaleX(.9); opacity: .5 } }

@@ -26,14 +26,3 @@ export const IUsers = (p: P) => <I {...p}><circle cx="9" cy="8" r="3.5" /><path 
 export const IGhost = (p: P) => <I {...p}><path d="M5 20V10a7 7 0 0 1 14 0v10l-2.5-2-2.3 2-2.2-2-2.3 2-2.2-2z" /><path d="M9.5 10h.01M14.5 10h.01" /></I>
 export const IFilter = (p: P) => <I {...p}><path d="M4 5h16l-6 8v6l-4-2v-4z" /></I>
 export const IChevron = (p: P) => <I {...p}><path d="m9 6 6 6-6 6" /></I>
-export function ISound({ on, s = 20 }: { on: boolean; s?: number }) {
-  if (!on) return <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" aria-hidden><path d="M9 18V6l10-2v12" /><circle cx="6.5" cy="18" r="2.5" /><circle cx="16.5" cy="16" r="2.5" /><path d="M3 3l18 18" opacity=".7" /></svg>
-  return (
-    <svg width={s} height={s} viewBox="0 0 24 24" aria-hidden>
-      {[4, 9, 14, 19].map((x, i) => (
-        <rect key={x} x={x - 1.2} width="2.4" rx="1.2" fill="currentColor" y={on ? 6 : 10.5} height={on ? 12 : 3}
-          style={on ? { animation: `eqBar ${0.7 + i * 0.13}s ease-in-out ${i * 0.1}s infinite alternate`, transformOrigin: '50% 50%', transformBox: 'fill-box' } : undefined} />
-      ))}
-    </svg>
-  )
-}

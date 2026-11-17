@@ -2,10 +2,8 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { useState } from 'react'
 import { connectWallet, disconnectWallet, useStore, linkWallet } from '../lib/store'
-import { sound } from '../lib/audio'
-import { useSound } from '../lib/useSound'
 import { cx, Magnetic } from './ui'
-import { IExplore, ICreate, IWallet, ITrophy, IShield, IHome, ISound, IBook } from './icons'
+import { IExplore, ICreate, IWallet, ITrophy, IShield, IHome, IBook } from './icons'
 
 export const NAV = [
   { to: '/explore', label: 'Explore', n: 1, icon: IExplore },
@@ -15,15 +13,6 @@ export const NAV = [
   { to: '/truth', label: 'TRUTH', n: 5, icon: IShield },
   { to: '/docs', label: 'Docs', n: 6, icon: IBook },
 ]
-
-export function SoundToggle() {
-  const on = useSound()
-  return (
-    <button onClick={() => sound.toggle()} aria-label={on ? 'Mute sound' : 'Enable sound'} aria-pressed={on} className={cx('grid h-10 w-10 place-items-center rounded-full border transition', on ? 'border-pink/50 bg-pink/15 text-pink' : 'border-lav/20 bg-plum/60 text-lav hover:text-cream')}>
-      <ISound on={on} s={18} />
-    </button>
-  )
-}
 
 export function WalletButton({ compact }: { compact?: boolean }) {
   const wallet = useStore((s) => s.wallet), connecting = useStore((s) => s.connecting), sol = useStore((s) => s.sol)
@@ -62,7 +51,7 @@ function CASearch() {
   const [q, setQ] = useState('')
   const nav = useNavigate()
   return (
-    <form onSubmit={(e) => { e.preventDefault(); if (q.trim()) nav(`/truth/${encodeURIComponent(q.trim())}`) }} className="relative hidden xl:block" data-cursor="native">
+    <form onSubmit={(e) => { e.preventDefault(); if (q.trim()) nav(`/truth/${encodeURIComponent(q.trim())}`) }} className="relative hidden xl:block">
       <IExplore s={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-lav/60" />
       <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="TRUTH-check any CA" className="h-10 w-56 rounded-full border border-lav/20 bg-night/60 pl-9 pr-3 text-sm font-bold outline-none placeholder:text-lav/50 focus:border-blue/60" />
     </form>
@@ -94,7 +83,6 @@ export function Nav() {
           </nav>
           <div className="ml-auto flex items-center gap-2">
             <CASearch />
-            <SoundToggle />
             <div className="hidden sm:block"><WalletButton /></div>
             <div className="sm:hidden"><WalletButton compact /></div>
           </div>

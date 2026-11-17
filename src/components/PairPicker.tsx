@@ -30,9 +30,11 @@ type Props = {
   ticker: string; value: string; onSelect: (q: QuoteToken) => void
   raiseSol: number; devBuySol: number; launchable: (mint: string) => boolean
   coin: { image?: string | null; hue: number; acc: Accessory }
+  /** Devnet build: only the on-chain allowlist is launchable; catalogue pairs are labelled mainnet-only. */
+  devnet?: boolean
 }
 
-export function PairPicker({ ticker, value, onSelect, raiseSol, devBuySol, launchable, coin }: Props) {
+export function PairPicker({ ticker, value, onSelect, raiseSol, devBuySol, launchable, coin, devnet = false }: Props) {
   const { status, data, error, retry } = useQuotes()
   const quotes = data?.quotes ?? []
   const solUsd = useMemo(() => solUsdFrom(quotes), [quotes])
@@ -47,25 +49,34 @@ export function PairPicker({ ticker, value, onSelect, raiseSol, devBuySol, launc
   const results = useMemo(() => (searching && scope !== 'all' ? matches.filter((t) => t.group === scope) : matches), [matches, scope, searching])
   const counts = useMemo(() => countByGroup(searching ? matches : quotes), [matches, quotes, searching])
   const selected = quotes.find((t) => t.mint === value) ?? (value === WSOL_MINT ? SOL_FALLBACK : null)
-  const featured = useMemo(() => FEATURED.map((m) => quotes.find((t) => t.mint === m)).filter((t): t is QuoteToken => !!t), [quotes])
+  const featured = useMemo(() => {
+    const live = quotes.filter((t) => t.configId)
+    const out = FEATURED.map((m) => quotes.find((t) => t.mint === m)).filter((t): t is QuoteToken => !!t)
+      .map((t) => (t.configId ? t : live.find((l) => l.symbol === t.symbol) ?? t))
+    // launchable aliases not in the hand-picked list (e.g. a Devnet test quote) still get a chip, right after SOL
+    for (const l of live) if (!out.some((t) => t.mint === l.mint)) out.splice(1, 0, l)
+    return out.filter((t, i) => out.findIndex((o) => o.mint === t.mint) === i)
+  }, [quotes])
+  const liveSymbols = useMemo(() => [...new Set(quotes.filter((t) => t.configId).map((t) => t.symbol))], [quotes])
   const lookup = useMemo(() => (mintMode ? lookupMint(q, quotes) : null), [mintMode, q, quotes])
   const T = ticker || 'TOKEN'
   const pick = (t: QuoteToken) => { if (t.configId) onSelect(t) }
 
   return (
-    <div className="min-w-0 space-y-4">
-      <div className="flex flex-wrap items-end justify-between gap-2">
-        <div><div className="label">Quote pair</div><div className="mt-0.5 text-[11px] font-bold text-lav/60">what buyers pay with · every pair below has a Raydium LaunchLab market</div></div>
-        {data && <span className="chip !text-[10px] text-lav" title={data.source}><span className="h-1.5 w-1.5 rounded-full bg-mint anim-live" />prices {new Date(data.observedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>}
+    <div className="min-w-0 space-y-3">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0"><div className="label">Quote pair</div><div className="mt-0.5 truncate text-[11px] font-bold text-lav/60">What buyers pay with{devnet && liveSymbols.length ? ` · launchable on devnet: ${liveSymbols.join(', ')}` : ''}</div></div>
+        {data && <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-lav/[.06] px-2 py-0.5 text-[10px] font-extrabold text-lav/70 ring-1 ring-lav/10" title={data.source}><span className="h-1.5 w-1.5 rounded-full bg-mint anim-live" />prices {new Date(data.observedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>}
       </div>
 
       {/* featured chips */}
       <div className="-mx-1 flex snap-x gap-2 overflow-x-auto px-1 pb-1 [scrollbar-width:none]" role="group" aria-label="Popular pairs">
-        {status === 'loading' && !data ? Array.from({ length: 6 }, (_, i) => <span key={i} className="h-10 w-24 shrink-0 animate-pulse rounded-full bg-lav/10" />)
+        {status === 'loading' && !data ? Array.from({ length: 6 }, (_, i) => <span key={i} className="h-8 w-20 shrink-0 animate-pulse rounded-full bg-lav/10" />)
           : featured.map((t) => (
-            <motion.button key={t.mint} type="button" whileTap={{ scale: 0.94 }} onClick={() => pick(t)} aria-pressed={value === t.mint}
-              className={cx('relative flex shrink-0 snap-start items-center gap-2 rounded-full py-1.5 pl-1.5 pr-3.5 text-sm font-extrabold ring-1 transition', value === t.mint ? 'bg-pink/15 text-cream ring-pink/60 shadow-glowp' : 'bg-night/40 text-cream/90 ring-lav/20 hover:bg-lav/10 hover:ring-pink/40')}>
-              <QuoteLogo t={t} size={26} />{t.symbol}
+            <motion.button key={t.mint} type="button" whileTap={{ scale: 0.95 }} onClick={() => pick(t)} aria-pressed={value === t.mint} aria-disabled={!t.configId}
+              title={!t.configId ? (devnet ? `${t.symbol}: mainnet only. On devnet, only ${liveSymbols.join(' and ')} are launchable.` : `${t.symbol}: no LaunchLab market`) : `${t.name}`}
+              className={cx('relative flex shrink-0 snap-start items-center gap-1.5 rounded-full py-1 pl-1 pr-3 text-[13px] font-extrabold ring-1 transition', value === t.mint ? 'bg-pink/15 text-cream ring-pink/50' : 'bg-night/40 text-cream/90 ring-lav/15 hover:bg-lav/10 hover:ring-lav/35', !t.configId && 'opacity-45')}>
+              <QuoteLogo t={t} size={22} />{t.symbol}
               {value === t.mint && <motion.span layoutId="feat-dot" className="absolute -right-0.5 -top-0.5 grid h-4 w-4 place-items-center rounded-full bg-pink text-night"><ICheck s={10} /></motion.span>}
             </motion.button>
           ))}
@@ -73,7 +84,7 @@ export function PairPicker({ ticker, value, onSelect, raiseSol, devBuySol, launc
 
       {/* browser */}
       <div className="overflow-hidden rounded-3xl bg-night/45 ring-1 ring-lav/15">
-        <Browser {...{ status, error, retry, quotes, results, counts, tab, setTab, scope, setScope, query, setQuery, searching, mintMode, lookup, value, pick, solUsd, T }} />
+        <Browser {...{ status, error, retry, quotes, results, counts, tab, setTab, scope, setScope, query, setQuery, searching, mintMode, lookup, value, pick, solUsd, T, devnet, liveSymbols }} />
       </div>
       {/* selected pair summary */}
       <PairSummary quote={selected} ticker={T} solUsd={solUsd} raiseSol={raiseSol} devBuySol={devBuySol} launchable={selected ? launchable(selected.mint) : false} coin={coin} loading={status === 'loading' && !data} />
@@ -87,9 +98,9 @@ function Browser(p: {
   status: string; error: string | null; retry: () => void; quotes: QuoteToken[]; results: QuoteToken[]; counts: Record<QuoteGroup, number>
   tab: QuoteGroup; setTab: (g: QuoteGroup) => void; scope: QuoteGroup | 'all'; setScope: (g: QuoteGroup | 'all') => void
   query: string; setQuery: (s: string) => void; searching: boolean; mintMode: boolean; lookup: MintLookup | null
-  value: string; pick: (t: QuoteToken) => void; solUsd: number | null; T: string
+  value: string; pick: (t: QuoteToken) => void; solUsd: number | null; T: string; devnet: boolean; liveSymbols: string[]
 }) {
-  const { status, error, retry, quotes, results, counts, tab, setTab, scope, setScope, query, setQuery, searching, mintMode, lookup, value, pick, solUsd, T } = p
+  const { status, error, retry, quotes, results, counts, tab, setTab, scope, setScope, query, setQuery, searching, mintMode, lookup, value, pick, solUsd, T, devnet, liveSymbols } = p
   const listId = useId(), inputRef = useRef<HTMLInputElement>(null)
   const [active, setActive] = useState(0)
   const scrollRef = useRef<HTMLDivElement>(null)
@@ -148,11 +159,12 @@ function Browser(p: {
               : (
                 <>
                   {!searching && <div className="flex items-center justify-between gap-2 px-4 pt-3 text-[11px] font-bold text-lav/70"><span>{GROUP_HINT[tab]}</span></div>}
+                  {devnet && (searching || tab !== 'solana') && <div className="mx-3 mt-2.5 flex items-start gap-2 rounded-xl bg-blue/[.07] px-3 py-2 text-[11px] font-bold leading-snug text-blue/90 ring-1 ring-blue/15"><IShield s={13} className="mt-px shrink-0" /><span>Raydium has LaunchLab markets for these on mainnet; on devnet only {liveSymbols.join(' and ') || 'SOL'} {liveSymbols.length > 1 ? 'are' : 'is'} launchable.</span></div>}
                   {!searching && tab === 'custom' && <PasteMint quotes={quotes} value={value} pick={pick} solUsd={solUsd} T={T} />}
                   {results.length === 0
                     ? (quotes.length === 0 ? <StateCard img="sleepy" title="No quote pairs yet" body="The quote list came back empty. SOL is still available." />
                       : <StateCard img="idle" title={`No pairs match “${query.trim()}”`} body="Try a ticker like USDC or NVDAX, or paste the token’s mint address." />)
-                    : <VirtualList id={listId} items={results} active={active} setActive={setActive} value={value} pick={pick} solUsd={solUsd} showGroup={searching} scrollRef={scrollRef} onKeyDown={onListKey} />}
+                    : <VirtualList id={listId} items={results} active={active} setActive={setActive} value={value} pick={pick} solUsd={solUsd} showGroup={searching} scrollRef={scrollRef} onKeyDown={onListKey} devnet={devnet} />}
                 </>
               )}
           </motion.div>
@@ -162,9 +174,9 @@ function Browser(p: {
   )
 }
 
-function VirtualList({ id, items, active, setActive, value, pick, solUsd, showGroup, scrollRef, onKeyDown }: {
+function VirtualList({ id, items, active, setActive, value, pick, solUsd, showGroup, scrollRef, onKeyDown, devnet }: {
   id: string; items: QuoteToken[]; active: number; setActive: (i: number) => void; value: string; pick: (t: QuoteToken) => void; solUsd: number | null; showGroup: boolean
-  scrollRef: React.RefObject<HTMLDivElement>; onKeyDown: (e: KeyboardEvent) => void
+  scrollRef: React.RefObject<HTMLDivElement>; onKeyDown: (e: KeyboardEvent) => void; devnet: boolean
 }) {
   const [top, setTop] = useState(0), [h, setH] = useState(384)
   useLayoutEffect(() => {
@@ -181,27 +193,27 @@ function VirtualList({ id, items, active, setActive, value, pick, solUsd, showGr
   }, [active, scrollRef])
   const start = Math.max(0, Math.floor(top / ROW) - 6), end = Math.min(items.length, Math.ceil((top + h) / ROW) + 6)
   return (
-    <div ref={scrollRef} onScroll={(e) => setTop(e.currentTarget.scrollTop)} style={{ height: Math.min(384, items.length * ROW + 16) }} className="relative max-h-[56vh] overflow-y-auto overscroll-contain px-2 py-2 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-pink/60"
+    <div ref={scrollRef} onScroll={(e) => setTop(e.currentTarget.scrollTop)} style={{ height: Math.min(384, items.length * ROW + 16) }} className="relative max-h-[56vh] overflow-y-auto overscroll-contain rounded-2xl px-2 py-2"
       id={id} role="listbox" aria-label="Quote tokens" tabIndex={0} onKeyDown={onKeyDown} aria-activedescendant={items[active] ? `${id}-opt-${items[active].mint}` : undefined}>
       <div style={{ height: items.length * ROW, position: 'relative' }}>
         {items.slice(start, end).map((t, k) => {
           const i = start + k
           return <Row key={t.mint} id={`${id}-opt-${t.mint}`} t={t} top={i * ROW} active={i === active} selected={t.mint === value} solUsd={solUsd} showGroup={showGroup}
-            onHover={() => setActive(i)} onPick={() => pick(t)} pos={i + 1} size={items.length} />
+            onHover={() => setActive(i)} onPick={() => pick(t)} pos={i + 1} size={items.length} devnet={devnet} />
         })}
       </div>
     </div>
   )
 }
 
-const Row = memo(function Row({ id, t, top, active, selected, solUsd, showGroup, onHover, onPick, pos, size }: {
-  id: string; t: QuoteToken; top: number; active: boolean; selected: boolean; solUsd: number | null; showGroup: boolean; onHover: () => void; onPick: () => void; pos: number; size: number
+const Row = memo(function Row({ id, t, top, active, selected, solUsd, showGroup, onHover, onPick, pos, size, devnet }: {
+  id: string; t: QuoteToken; top: number; active: boolean; selected: boolean; solUsd: number | null; showGroup: boolean; onHover: () => void; onPick: () => void; pos: number; size: number; devnet: boolean
 }) {
   const target = migrationTarget(t, solUsd), market = !!t.configId
   return (
-    <div id={id} role="option" aria-selected={selected} aria-disabled={!market} aria-posinset={pos} aria-setsize={size} onPointerMove={onHover} onClick={onPick}
+    <div id={id} role="option" aria-selected={selected} aria-disabled={!market} aria-posinset={pos} aria-setsize={size} onPointerMove={onHover} onMouseDown={(e) => e.preventDefault()} onClick={onPick}
       style={{ position: 'absolute', top, left: 0, right: 0, height: ROW - 4 }}
-      className={cx('group flex cursor-pointer items-center gap-3 rounded-2xl px-3 transition-colors', selected ? 'bg-pink/15 ring-1 ring-pink/50' : active ? 'bg-lav/10' : 'hover:bg-lav/5', !market && 'cursor-not-allowed opacity-60')}>
+      className={cx('group flex cursor-pointer items-center gap-3 rounded-2xl px-3 transition-colors', selected ? 'bg-pink/[.12] ring-1 ring-inset ring-pink/40' : active ? 'bg-lav/10' : 'hover:bg-lav/5', !market && 'cursor-not-allowed opacity-60')}>
       <QuoteLogo t={t} size={36} />
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5">
@@ -215,7 +227,9 @@ const Row = memo(function Row({ id, t, top, active, selected, solUsd, showGroup,
         {market ? <>
           <div className="font-num text-[13px] font-semibold tnum text-cream">{target.ok ? `${fmtQuoteAmount(target.ui, t.decimals)}` : '—'} <span className="hidden max-w-[72px] truncate align-bottom text-lav/70 sm:inline-block">{t.symbol}</span></div>
           <div className="text-[11px] font-bold text-lav/60">{target.ok ? (target.basis === 'min-migration' ? 'Raydium min.' : <><span className="sm:hidden">target</span><span className="hidden sm:inline">migration target</span></>) : target.reason === 'no-price' ? 'no price feed yet' : 'target too large'}</div>
-        </> : <div className="rounded-full bg-peach/10 px-2 py-0.5 text-[10px] font-black uppercase text-peach ring-1 ring-peach/30">No LaunchLab market</div>}
+        </> : devnet
+          ? <div className="rounded-full bg-blue/10 px-2 py-0.5 text-[10px] font-black uppercase tracking-wide text-blue/90 ring-1 ring-blue/25" title="Raydium has a LaunchLab market for this token on mainnet only">Mainnet only</div>
+          : <div className="rounded-full bg-peach/10 px-2 py-0.5 text-[10px] font-black uppercase text-peach ring-1 ring-peach/30">No LaunchLab market</div>}
       </div>
       <span className={cx('grid h-5 w-5 shrink-0 place-items-center rounded-full ring-1 transition', selected ? 'bg-pink text-night ring-pink' : 'ring-lav/25 text-transparent')}><ICheck s={12} /></span>
     </div>

@@ -24,7 +24,7 @@ export default function Truth() {
       <PeekMochi src="idle" />
       <div className="flex items-center gap-3"><span className="grid h-12 w-12 place-items-center rounded-2xl bg-mint/15 text-mint"><IShield s={26} /></span><h1 className="h-display text-5xl md:text-6xl">TRUTH</h1></div>
       <p className="mt-2 max-w-2xl font-bold text-lav">Inspect token controls, recorded trades and funding links. Scores are evidence-based heuristics, not a guarantee of safety.</p>
-      <form onSubmit={(e) => { e.preventDefault(); if (q.trim()) nav(`/truth/${encodeURIComponent(q.trim())}`) }} className="glass mt-5 flex items-center gap-2 rounded-full p-2" data-cursor="native">
+      <form onSubmit={(e) => { e.preventDefault(); if (q.trim()) nav(`/truth/${encodeURIComponent(q.trim())}`) }} className="glass mt-5 flex items-center gap-2 rounded-full p-2">
         <IExplore s={18} className="ml-3 text-lav" />
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Contract address or $TICKER" className="flex-1 bg-transparent px-2 py-2 font-num text-base outline-none placeholder:text-lav/50" aria-label="Contract address" />
         <button className="btn-candy px-6 py-2.5 text-sm">Check</button>
@@ -52,7 +52,7 @@ export default function Truth() {
             <div className="mt-3 font-num text-lg font-semibold tnum">TRUTH score {report.score==null?'—':`${report.score}/100`}</div>
             <div className="mt-1 text-xs font-bold text-lav">{report.source==='sandbox'?'Sandbox':'Devnet'} activity · {report.sampleSize||0} recorded trades · heuristic only</div>
           </Card>
-          <div className="space-y-5" data-cursor="native">
+          <div className="space-y-5">
             <Card className="p-5">
               <div className="font-display text-xl font-extrabold">Observed buyer activity</div>
               <div className="mt-4 flex h-6 overflow-hidden rounded-full ring-1 ring-lav/15">

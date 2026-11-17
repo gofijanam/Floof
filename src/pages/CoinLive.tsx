@@ -64,7 +64,7 @@ export default function CoinLive() {
               </div>
             </div>
             <div className="mx-auto mt-2 max-w-[760px]"><EscrowCloud coin={c} /></div>
-            <div className="grid grid-cols-2 gap-3 border-t border-lav/10 pt-4 sm:grid-cols-4" data-cursor="native">
+            <div className="grid grid-cols-2 gap-3 border-t border-lav/10 pt-4 sm:grid-cols-4">
               <Mini k="Price ceiling" v={fmtPrice(c.priceCeiling)} s={`${c.quote ?? 'SOL'} / token`} />
               <Mini k="If it closed now" v={st.failed ? 'refund' : fmtPrice(st.price)} s={st.failed ? 'below min target' : 'one price for all'} accent={st.failed ? 'text-peach' : 'text-blue'} />
               <Mini k="Oversubscription" v={`${st.oversub.toFixed(2)}×`} s={st.over ? `fill ${(st.fill * 100).toFixed(0)}% pro-rata` : 'everyone fills 100%'} accent={st.over ? 'text-pink' : 'text-mint'} />
@@ -80,7 +80,7 @@ export default function CoinLive() {
           </div>
 
           {/* participants feed */}
-          <Card className="p-4 md:p-5" data-cursor="native">
+          <Card className="p-4 md:p-5">
             <div className="flex items-center justify-between"><div className="font-display text-xl font-extrabold">Pledges</div><span className="chip"><LiveDot /> live</span></div>
             <div className="mt-3 divide-y divide-lav/10">
               <AnimatePresence initial={false}>
@@ -145,7 +145,7 @@ function PledgeForm({ coinId }: { coinId: string }) {
   const proj = settle({ ...c, pledged: c.pledged + (v || 0) }, mine + (v || 0))
   const valid = !!amt && !err
   return (
-    <Card neon="p" className="p-5" data-cursor="native">
+    <Card neon="p" className="p-5">
       <div className="flex items-center justify-between"><div className="font-display text-2xl font-extrabold">Pledge {Q}</div><span className="chip text-lav tnum">{tokenQuote ? `pay in ${Q}` : `bal ${bal.toFixed(2)}`}</span></div>
       {mine > 0 && <div className="mt-3 flex items-center justify-between rounded-2xl bg-pink/10 px-3 py-2 text-sm font-extrabold text-pink ring-1 ring-pink/25"><span>Your pledge</span><span className="font-num tnum">{mine.toFixed(3)} SOL</span></div>}
       <div className="mt-4">

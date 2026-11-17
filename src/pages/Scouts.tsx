@@ -32,7 +32,7 @@ export default function Scouts() {
           )
         })}
       </div>
-      <Card className="mt-0 overflow-x-auto rounded-t-none" data-cursor="native">
+      <Card className="mt-0 overflow-x-auto rounded-t-none">
         <table className="w-full min-w-[620px] text-sm">
           <thead><tr className="text-left text-[11px] font-black uppercase tracking-wider text-lav/60">{['Rank', 'Scout', 'Points', 'Windows joined', 'Avg hold', 'Earned'].map((h) => <th key={h} className="px-4 py-3">{h}</th>)}</tr></thead>
           <tbody>{SCOUTS.slice(3).map((s) => (

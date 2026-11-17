@@ -52,7 +52,7 @@ export default function Portfolio() {
         <Card neon="p" className="p-5"><div className="label">claimable</div><div className="mt-1 font-num text-3xl font-semibold text-pink tnum">{unclaimed.toFixed(3)}</div><div className="text-xs font-bold text-lav">SOL refunds + Scout rewards</div></Card>
       </div>
       <div className="mt-6 overflow-x-auto"><Tabs id="pf" value={tab} onChange={setTab} items={[{ v: 'positions', label: 'Positions', count: rows.length }, { v: 'pledges', label: 'Open pledges', count: Object.keys(pledges).length }, { v: 'tickets', label: 'Window tickets', count: MY_TICKETS.length }, { v: 'claims', label: 'Claims', count: claims.filter((c) => !c.claimed).length }]} /></div>
-      <div className="mt-4" data-cursor="native">
+      <div className="mt-4">
         {tab === 'positions' && (
           <Card className="overflow-x-auto">
             <table className="w-full min-w-[720px] text-sm">

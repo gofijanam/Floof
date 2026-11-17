@@ -155,7 +155,7 @@ export default function Create() {
       </div>
 
       <div className="mt-5 grid gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
-        <Card className="min-w-0 p-5 md:p-6" data-cursor="native">
+        <Card className="min-w-0 p-5 md:p-6">
           {/* Enter-only step transition: a "wait" exit could stall forever behind the pair picker's nested presence animations, leaving Review blank. */}
           <>
             <motion.div key={step} initial={{ opacity: 0, x: 24 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.22 }}>
@@ -195,10 +195,10 @@ export default function Create() {
               {step === 1 && (
                 <div className="space-y-6">
                   <SliderField label="Fair window duration" value={`${f.durationMin} min`} hint="opens the moment your coin is created" error={err('durationMin')}
-                    min={MIN_WIN} max={MAX_WIN} step={5} v={f.durationMin} onChange={(v) => set('durationMin', v)} aria="Fair window duration in minutes" ticks={['5 min', '15', '30', '45', '60 min']} accent="blue" />
+                    min={MIN_WIN} max={MAX_WIN} step={5} v={f.durationMin} onChange={(v) => set('durationMin', v)} aria="Fair window duration in minutes" ticks={[[MIN_WIN, `${MIN_WIN} min`], ...[15, 30, 45].filter((x) => x > MIN_WIN && x < MAX_WIN).map((x): Tick => [x, `${x}`]), [MAX_WIN, `${MAX_WIN} min`]]} accent="blue" />
                   <div>
                     <SliderField label="Presale raise" value={qn ? `${qAmt(maxRaise)} ${Q}` : `${fmtSol(maxRaise)} SOL`} hint={qn ? `≈ ${fmtSol(maxRaise)} SOL of curve · sized in SOL, paid in ${Q}` : `0–${fmtSol(MAX_BUY_SOL - creatorBuy)} SOL`} error={err('maxRaise')}
-                      min={0} max={MAX_BUY_SOL - creatorBuy} step={0.5} v={maxRaise} onChange={(v) => { set('maxRaise', fmtSol(v)); if ((parseFloat(f.minTarget) || 0) > v || (v > 0 && (parseFloat(f.minTarget) || 0) < v * 0.1) || v === 0) set('minTarget', fmtSol(v === 0 ? 0 : Math.max(v * 0.5, 0))) }} aria="Presale raise in SOL" ticks={['0', '20', '40', '60', `${fmtSol(MAX_BUY_SOL - creatorBuy)} SOL`]} accent="pink" />
+                      min={0} max={MAX_BUY_SOL - creatorBuy} step={0.5} v={maxRaise} onChange={(v) => { set('maxRaise', fmtSol(v)); if ((parseFloat(f.minTarget) || 0) > v || (v > 0 && (parseFloat(f.minTarget) || 0) < v * 0.1) || v === 0) set('minTarget', fmtSol(v === 0 ? 0 : Math.max(v * 0.5, 0))) }} aria="Presale raise in SOL" ticks={[[0, '0'], ...[20, 40, 60].filter((x) => x < MAX_BUY_SOL - creatorBuy - 8).map((x): Tick => [x, qn ? qAmt(x) : `${x}`]), [MAX_BUY_SOL - creatorBuy, qn ? `${qAmt(MAX_BUY_SOL - creatorBuy)} ${Q}` : `${fmtSol(MAX_BUY_SOL - creatorBuy)} SOL`]]} accent="pink" />
                   </div>
                   <div className="grid gap-4 sm:grid-cols-2">
                     <Field label="Min target (SOL)" error={err('minTarget')} hint="else everyone is refunded"><input aria-label="Minimum target in SOL" className="input font-num tnum" inputMode="decimal" value={f.minTarget} onChange={(e) => set('minTarget', e.target.value.replace(/[^0-9.]/g, ''))} /></Field>
@@ -217,11 +217,11 @@ export default function Create() {
               {step === 2 && (
                 <div className="space-y-6">
                   <div>
-                    <PairPicker ticker={f.ticker} value={f.quoteMint} onSelect={(q) => setF((p) => ({ ...p, quote: q.symbol, quoteMint: q.mint }))} raiseSol={maxRaise} devBuySol={creatorBuy} launchable={quoteLive} coin={{ image: f.image, hue: f.hue, acc: f.acc }} />
+                    <PairPicker devnet={devnet} ticker={f.ticker} value={f.quoteMint} onSelect={(q) => setF((p) => ({ ...p, quote: q.symbol, quoteMint: q.mint }))} raiseSol={maxRaise} devBuySol={creatorBuy} launchable={quoteLive} coin={{ image: f.image, hue: f.hue, acc: f.acc }} />
                     {touched && errors.quote && <div className="mt-2 text-xs font-extrabold text-danger" role="alert">{errors.quote}</div>}
                   </div>
                   <SliderField label="Dev buy" value={qn ? `${qAmt(creatorBuy)} ${Q}` : `${fmtSol(creatorBuy)} SOL`} hint="optional · same clearing price as every pledger" error={err('creatorBuy')}
-                    min={0} max={Math.max(0, Math.min(10, MAX_BUY_SOL - maxRaise))} step={0.1} v={creatorBuy} onChange={(v) => set('creatorBuy', fmtSol(v))} aria="Dev buy in SOL" ticks={['0', `${fmtSol(Math.max(0, Math.min(10, MAX_BUY_SOL - maxRaise)))} SOL`]} accent="blue" />
+                    min={0} max={Math.max(0, Math.min(10, MAX_BUY_SOL - maxRaise))} step={0.1} v={creatorBuy} onChange={(v) => set('creatorBuy', fmtSol(v))} aria="Dev buy in SOL" ticks={[[0, qn ? `0 ${Q}` : '0'], [Math.max(0, Math.min(10, MAX_BUY_SOL - maxRaise)), qn ? `${qAmt(Math.max(0, Math.min(10, MAX_BUY_SOL - maxRaise)))} ${Q}` : `${fmtSol(Math.max(0, Math.min(10, MAX_BUY_SOL - maxRaise)))} SOL`]]} accent="blue" />
                   {curve && creatorBuy > 0 && <div className="grid gap-2 rounded-2xl bg-night/50 p-4 text-sm font-bold ring-1 ring-lav/10 sm:grid-cols-3">
                     <Stat k="You receive" v={`${(Number(curve.creatorTokens) / 1e12).toFixed(2)}M tokens`} />
                     <Stat k="Share of supply" v={`${(Number(curve.creatorTokens) / 1e13).toFixed(2)}%`} />
@@ -229,7 +229,7 @@ export default function Create() {
                   </div>}
                   <div className={cx(creatorBuy === 0 && 'pointer-events-none opacity-45')} aria-disabled={creatorBuy === 0}>
                     <SliderField label="Dev token lock" value={creatorBuy === 0 ? 'No dev buy' : f.lockDays === 0 ? 'No lock' : `${f.lockDays} days`} hint="optional · locks your dev-buy tokens on-chain" error={err('lockDays')}
-                      min={0} max={LOCK_STOPS.length - 1} step={1} v={Math.max(0, LOCK_STOPS.indexOf(f.lockDays))} onChange={(i) => set('lockDays', LOCK_STOPS[i])} aria="Dev token lock" ticks={LOCK_STOPS.map((d) => d === 0 ? 'none' : d < 365 ? `${d}d` : '1y')} accent="mint" />
+                      min={0} max={LOCK_STOPS.length - 1} step={1} v={Math.max(0, LOCK_STOPS.indexOf(f.lockDays))} onChange={(i) => set('lockDays', LOCK_STOPS[i])} aria="Dev token lock" ticks={LOCK_STOPS.map((d, i): Tick => [i, d === 0 ? 'none' : d < 365 ? `${d}d` : '1y'])} accent="mint" />
                   </div>
                   <div className="flex items-center gap-4 rounded-2xl bg-mint/10 p-4 ring-1 ring-mint/25">
                     <IShield s={28} className="shrink-0 text-mint" />
@@ -306,7 +306,7 @@ const Locked = ({ label, v }: { label: string; v: string }) => (
 )
 function Toggle({ on, onChange, label, locked }: { on: boolean; onChange?: (v: boolean) => void; label: string; locked?: boolean }) {
   return (
-    <button type="button" role="switch" aria-checked={on} aria-disabled={locked} onClick={() => !locked && onChange?.(!on)} className="flex w-full items-center justify-between rounded-2xl px-1 py-2 text-left text-sm font-bold">
+    <button type="button" role="switch" aria-checked={on} aria-disabled={locked} onClick={() => !locked && onChange?.(!on)} className={cx('flex w-full items-center justify-between rounded-2xl px-2 py-2 text-left text-sm font-bold transition-colors', !locked && 'hover:bg-lav/5')}>
       <span>{label} {locked && <span className="ml-1 text-[10px] font-black uppercase text-lav/60">always on</span>}</span>
       <span className={cx('relative h-6 w-11 rounded-full transition', on ? 'bg-mint' : 'bg-lav/20')}><motion.span layout className={cx('absolute top-0.5 h-5 w-5 rounded-full bg-cream shadow', on ? 'right-0.5' : 'left-0.5')} /></span>
     </button>
@@ -334,18 +334,28 @@ function CurvePanel({ curve, raise, creatorBuy, quote = 'SOL' }: { curve: Return
   )
 }
 
-const ACCENT = { pink: 'accent-[#FF5FB8]', blue: 'accent-[#5FD4FF]', mint: 'accent-[#7CF5C8]' } as const
+const ACCENT = { pink: '#FF5FB8', blue: '#5FD4FF', mint: '#7CF5C8' } as const
+/** Range thumb diameter in px; must match .fr-range in styles.css so tick labels sit under the thumb. */
+const THUMB = 18
+type Tick = [value: number, label: string]
 const TEXT = { pink: 'text-pink', blue: 'text-blue', mint: 'text-mint' } as const
-function SliderField({ label, value, hint, error, min, max, step, v, onChange, aria, ticks, accent }: { label: string; value: string; hint?: string; error?: string | false; min: number; max: number; step: number; v: number; onChange: (v: number) => void; aria: string; ticks?: string[]; accent: keyof typeof ACCENT }) {
+function SliderField({ label, value, hint, error, min, max, step, v, onChange, aria, ticks, accent }: { label: string; value: string; hint?: string; error?: string | false; min: number; max: number; step: number; v: number; onChange: (v: number) => void; aria: string; ticks?: Tick[]; accent: keyof typeof ACCENT }) {
+  const cl = Math.min(max, Math.max(min, v)), pct = (x: number) => (max > min ? (Math.min(max, Math.max(min, x)) - min) / (max - min) : 0)
   return (
     <div role="group" aria-label={label}>
       <div className="flex items-end justify-between gap-3">
         <div><div className="label">{label}</div>{hint && <div className="mt-0.5 text-[11px] font-bold text-lav/60">{hint}</div>}</div>
         <div className="flex items-center gap-2"><div className={cx('font-num text-3xl font-semibold tnum', TEXT[accent])}>{value}</div></div>
       </div>
-      <input type="range" min={min} max={max} step={step} value={Math.min(max, Math.max(min, v))} onChange={(e) => onChange(+e.target.value)} aria-label={aria} aria-valuetext={value}
-        className={cx('mt-3 w-full', ACCENT[accent])} style={{ background: 'transparent' }} />
-      {ticks && <div className="mt-1.5 flex justify-between text-[10px] font-black uppercase text-lav/50">{ticks.map((t, i) => <span key={i}>{t}</span>)}</div>}
+      <input type="range" min={min} max={max} step={step} value={cl} onChange={(e) => onChange(+e.target.value)} aria-label={aria} aria-valuetext={value}
+        className="fr-range mt-3 w-full" style={{ '--pct': pct(cl), '--accent': ACCENT[accent] } as React.CSSProperties} />
+      {ticks && <div className="relative mt-1.5 h-4 text-[10px] font-black uppercase text-lav/50" aria-hidden>
+        {ticks.map(([tv, t], i) => {
+          const p = pct(tv), first = i === 0 && p === 0, last = i === ticks.length - 1 && p === 1
+          // centre each label under the thumb at that value: thumb centre = THUMB/2 + p × (track − THUMB)
+          return <span key={i} className="absolute top-0 whitespace-nowrap" style={first ? { left: 0 } : last ? { right: 0 } : { left: `calc(${THUMB / 2}px + ${p} * (100% - ${THUMB}px))`, transform: 'translateX(-50%)' }}>{t}</span>
+        })}
+      </div>}
       {error && <div className="mt-1 text-xs font-extrabold text-danger" role="alert">{error}</div>}
     </div>
   )

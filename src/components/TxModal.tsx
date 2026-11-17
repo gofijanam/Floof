@@ -28,7 +28,7 @@ export function TxModal({ open, title, rows, note, confirmLabel = 'Confirm', onC
   return createPortal(
     <AnimatePresence>
       {open && (
-        <motion.div className="fixed inset-0 z-[80] grid place-items-end bg-night/70 backdrop-blur-sm sm:place-items-center" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => phase !== 'signing' && onClose()} data-cursor="native">
+        <motion.div className="fixed inset-0 z-[80] grid place-items-end bg-night/70 backdrop-blur-sm sm:place-items-center" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => phase !== 'signing' && onClose()}>
           <motion.div role="dialog" aria-modal="true" aria-label={title} onClick={(e) => e.stopPropagation()} className="glass-strong w-full rounded-t-[2rem] p-5 sm:w-[440px] sm:rounded-[2rem] sm:p-6"
             initial={{ y: 40, scale: 0.97, opacity: 0 }} animate={{ y: 0, scale: 1, opacity: 1 }} exit={{ y: 40, opacity: 0 }} transition={{ type: 'spring', stiffness: 380, damping: 32 }}>
             <div className="flex items-center justify-between">

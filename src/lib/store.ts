@@ -1,6 +1,5 @@
 import {useSyncExternalStore} from 'react'
 import {Coin,Creator,setCreators} from './mock'
-import {sfx} from './audio'
 import {api,uploadImage} from './api'
 export interface FeedItem {id:number;coin:string;ticker:string;wallet:string;amount:number;t:number;kind:'pledge'|'blocked'|'buy'|'sell';tokens?:number}
 export interface Toast {id:number;ambient?:boolean;kind:'pledge'|'poof'|'info'|'success'|'blocked';title:string;body?:string;coin?:string}
@@ -22,7 +21,7 @@ function ingest(data:any){
 let refreshInFlight:Promise<void>|null=null
 export function refresh(){if(refreshInFlight)return refreshInFlight;refreshInFlight=api('/state').then(ingest).catch(e=>{set({error:e.message});throw e}).finally(()=>{refreshInFlight=null});return refreshInFlight}
 async function action(path:string,data:unknown){const result=await api(path,data);if(result.state)ingest(result.state);return result}
-export async function connectWallet(){if(state.connecting)return;const devnet=state.mode==='devnet';set({connecting:true});try{disconnected=false;try{sessionStorage.removeItem('floof-disconnected')}catch{}if((await api('/health')).authMode==='wallet'){await walletLogin();return}if(devnet){await api('/session',{});await linkWallet();return}await action('/session',{});sfx.chime();toast({kind:'success',title:'Sandbox wallet opened',body:'100 test SOL on first use. No on-chain funds are moved.'})}catch(e){toast({kind:'info',title:'Could not open wallet',body:(e as Error).message})}finally{set({connecting:false})}}
+export async function connectWallet(){if(state.connecting)return;const devnet=state.mode==='devnet';set({connecting:true});try{disconnected=false;try{sessionStorage.removeItem('floof-disconnected')}catch{}if((await api('/health')).authMode==='wallet'){await walletLogin();return}if(devnet){await api('/session',{});await linkWallet();return}await action('/session',{});toast({kind:'success',title:'Sandbox wallet opened',body:'100 test SOL on first use. No on-chain funds are moved.'})}catch(e){toast({kind:'info',title:'Could not open wallet',body:(e as Error).message})}finally{set({connecting:false})}}
 export function disconnectWallet(){api('/auth/logout',{}).catch(()=>{});disconnected=true;try{sessionStorage.setItem('floof-disconnected','1')}catch{}set({wallet:false,positions:{},claims:[],tickets:[],myPledges:{}})}
 async function walletLogin(){const provider=(window as any).phantom?.solana||(window as any).solana;if(!provider?.signMessage)throw new Error('Install Phantom to connect your Solana wallet.');const connected=await provider.connect(),wallet=connected.publicKey.toString(),challenge=await api('/auth/challenge',{wallet}),signed=await provider.signMessage(new TextEncoder().encode(challenge.message),'utf8');await api('/auth/verify',{id:challenge.id,signature:btoa(String.fromCharCode(...signed.signature))});await api('/session',{});await refresh();toast({kind:'success',title:'Wallet connected',body:'Signed in with Phantom.'})}
 export async function linkWallet(){try{
@@ -38,7 +37,7 @@ export async function pledge(coin:string,amount:number){
  const key = `${coin}:${amount}`
  let payload = pendingPledges.get(key)
  if (!payload) { const att = await api('/pledge/attest',{coin}); payload={coin,amount,attestation:att.id}; pendingPledges.set(key,payload) }
- try { const r=await action('/pledges',payload);pendingPledges.delete(key);sfx.pop(1.2);return r }
+ try { const r=await action('/pledges',payload);pendingPledges.delete(key);return r }
  catch(e) { if(!(e as any).ambiguous)pendingPledges.delete(key);throw e }
 }
 export async function jumpToZero(coin:string,_ms=5000){try{const r=await action('/sandbox/advance',{coin});toast({kind:'info',title:r.started?'Window opened for ten minutes':'Window closes in 5 seconds',body:'Sandbox control only.'});return r}catch(e){toast({kind:'info',title:'Could not advance window',body:(e as Error).message})}}
@@ -47,7 +46,7 @@ export const showPoof=(id:string)=>set({poof:id})
 let started=false
 export function startSim(){if(started)return;started=true;refresh().catch(()=>{});setInterval(()=>set({now:Date.now()}),1000);setInterval(()=>{if(document.visibilityState==='visible'){refresh().catch(()=>{});if(state.mode==='devnet')import('./chain').then(m=>Promise.all(m.pendingDevnet().map(p=>m.confirmDevnet(p).catch(()=>{})))).catch(()=>{})}},4000);document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')refresh().catch(()=>{})})}
 export async function trade(quoteId:string){if(state.mode==='devnet'){if(!state.linkedWallet)throw new Error('Link Phantom first.');const m=await import('./chain'),result=await m.executePrepared(quoteId,state.linkedWallet);if(result.pending)throw new Error('Trade submitted; waiting for finalization. Do not resubmit.');await refresh();return result}return action('/trades',{quoteId})}
-export async function claim(id:string){if(state.mode==='devnet'){const [kind,window]=id.split(':');return chainAction(kind==='window'?'claim':kind,kind==='scout'?{epoch:window}:{window})}const r=await action('/claims',{id});sfx.chime();return r}
+export async function claim(id:string){if(state.mode==='devnet'){const [kind,window]=id.split(':');return chainAction(kind==='window'?'claim':kind,kind==='scout'?{epoch:window}:{window})}const r=await action('/claims',{id});return r}
 export async function addCoin(form:any){const payload={...form,image:form.image?(form.image.startsWith('/api/images/')?form.image:await uploadImage(form.image)):null};if(state.mode==='devnet'){const params=await api('/chain/launch-settings',payload),result=await chainAction('create',{params});return {...result,coin:result.window}}await api('/coins/prepare',payload);return action('/coins',payload)}
 export async function followCreator(handle:string){try{const r=await action('/creators/follow',{handle});toast({kind:'success',title:r.following?`Following @${handle}`:`Unfollowed @${handle}`,body:'Your list is saved to your account.'})}catch(e){toast({kind:'info',title:'Could not save follow',body:(e as Error).message})}}
 

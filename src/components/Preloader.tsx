@@ -1,7 +1,5 @@
 import { AnimatePresence, motion } from 'framer-motion'
 import { useEffect, useState } from 'react'
-import { sound, sfx } from '../lib/audio'
-import { useSound } from '../lib/useSound'
 
 const LINES = ['fluffing the clouds…', 'warming up the escrow…', 'locking the sniper door…', 'aligning one price…']
 
@@ -9,7 +7,6 @@ export function Preloader({ onDone }: { onDone: () => void }) {
   const [p, setP] = useState(0)
   const [phase, setPhase] = useState<'load' | 'puff' | 'out'>('load')
   const [line, setLine] = useState(0)
-  const on = useSound()
   useEffect(() => {
     const start = performance.now(); let raf = 0
     const dur = 1900
@@ -23,7 +20,7 @@ export function Preloader({ onDone }: { onDone: () => void }) {
     return () => { cancelAnimationFrame(raf); clearInterval(li) }
   }, [])
   useEffect(() => {
-    if (phase === 'puff') { sfx.poof(); const t = setTimeout(() => setPhase('out'), 650); return () => clearTimeout(t) }
+    if (phase === 'puff') { const t = setTimeout(() => setPhase('out'), 650); return () => clearTimeout(t) }
     if (phase === 'out') { const t = setTimeout(onDone, 700); return () => clearTimeout(t) }
   }, [phase, onDone])
   return (
@@ -51,7 +48,6 @@ export function Preloader({ onDone }: { onDone: () => void }) {
           <div className="mt-3 flex w-56 justify-between font-num text-xs font-semibold text-lav tnum">
             <span>{phase === 'load' ? LINES[line] : 'POOF!'}</span><span>{p}%</span>
           </div>
-          <button onClick={() => sound.toggle()} className="mt-8 rounded-full border border-lav/25 px-4 py-1.5 text-xs font-extrabold text-lav/90 hover:text-cream">♪ sound {on ? 'on' : 'off'} · tap to toggle</button>
         </div>
       </motion.div>
     </AnimatePresence>

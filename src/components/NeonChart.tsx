@@ -27,7 +27,7 @@ export function NeonChart({ data, height = 320, clearing, label = 'Price (SOL)' 
   }
   const hp = hover != null ? pts[hover] : null
   return (
-    <div ref={wrap} className="relative w-full select-none" onPointerMove={onMove} onPointerLeave={() => setHover(null)} data-cursor="native">
+    <div ref={wrap} className="relative w-full select-none" onPointerMove={onMove} onPointerLeave={() => setHover(null)}>
       <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="block w-full" style={{ height }}>
         <defs>
           <linearGradient id={`s${id}`} x1="0" x2="1"><stop offset="0" stopColor="#5FD4FF" /><stop offset=".55" stopColor="#B69CFF" /><stop offset="1" stopColor="#FF5FB8" /></linearGradient>

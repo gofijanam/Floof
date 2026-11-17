@@ -5,7 +5,6 @@ import { CoinAvatar } from '../components/CoinAvatar'
 import { TxModal } from '../components/TxModal'
 import { Card, Magnetic, cx } from '../components/ui'
 import { confetti } from '../components/confetti'
-import { sfx } from '../lib/audio'
 import { toast, useCoin, useStore, claim } from '../lib/store'
 import { settle } from '../lib/mock'
 import { fmtPrice } from '../lib/format'
@@ -28,7 +27,6 @@ export default function Poof() {
   const [snap] = useState(() => (c ? { coin: c, st: settle(c, mine) } : null))
   useEffect(() => {
     if (!snap) return
-    sfx.poof()
     const t1 = setTimeout(() => mochi.current?.puff(), 300)
     const bursts = reduced ? [] : [
       setTimeout(() => confetti({ x: innerWidth / 2, y: innerHeight * 0.32, n: 160, power: 1.2 }), 420),
@@ -68,7 +66,7 @@ export default function Poof() {
       </section>
 
       <motion.section initial={{ opacity: 0, y: 40 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 1.2, type: 'spring', stiffness: 120, damping: 18 }} className="relative mx-auto mt-10 grid max-w-[1000px] gap-5 px-4 md:grid-cols-[1.3fr_1fr] md:px-6">
-        <Card neon="p" className="p-5 text-left md:p-6" data-cursor="native">
+        <Card neon="p" className="p-5 text-left md:p-6">
           <div className="flex items-center gap-3">
             <motion.div layoutId={`avatar-${c.id}`}><CoinAvatar image={c.image} hue={c.hue} accessory={c.accessory} size={56} mood="happy" /></motion.div>
             <div><div className="font-display text-2xl font-extrabold">Your share</div><div className="text-sm font-bold text-lav">{mine ? `You pledged ${mine.toFixed(3)} ${c.quote ?? 'SOL'}` : 'You didn’t pledge in this window'}</div></div>

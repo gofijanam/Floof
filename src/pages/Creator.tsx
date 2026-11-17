@@ -31,7 +31,7 @@ export default function Creator() {
           </div>
           <div className="text-center"><RepRing v={c.rep} size={120} stroke={9} /><div className="label mt-2">reputation</div></div>
         </div>
-        <div className="relative mt-6 grid grid-cols-2 gap-3 md:grid-cols-5" data-cursor="native">
+        <div className="relative mt-6 grid grid-cols-2 gap-3 md:grid-cols-5">
           {[['Launches', c.launches], ['Graduated', c.graduated], ['Graduation rate', `${c.launches ? Math.round(c.graduated / c.launches * 100) : 0}%`], ['Followers', c.followers], ['Joined', c.joined]].map(([k, v]) => (
             <div key={k as string} className="rounded-2xl bg-night/50 p-4 ring-1 ring-lav/10"><div className="label">{k}</div><div className="mt-1 font-num text-2xl font-semibold tnum">{v}</div></div>
           ))}

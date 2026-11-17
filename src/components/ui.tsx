@@ -1,7 +1,6 @@
 import { motion, useMotionValue, useSpring, useReducedMotion, AnimatePresence } from 'framer-motion'
 import { ReactNode, useEffect, useRef, useState, PointerEvent as RPE } from 'react'
 import { Link } from 'react-router-dom'
-import { sfx } from '../lib/audio'
 import type { Coin, Grade } from '../lib/mock'
 import { maxRaise } from '../lib/mock'
 import { mmss } from '../lib/format'
@@ -20,7 +19,7 @@ export function Magnetic({ children, strength = 0.35, className = '' }: { childr
     x.set((e.clientX - r.left - r.width / 2) * strength); y.set((e.clientY - r.top - r.height / 2) * strength)
   }
   return (
-    <motion.div ref={ref} className={cx('inline-block', className)} style={{ x, y }} onPointerMove={move} onPointerLeave={() => { x.set(0); y.set(0) }} onPointerEnter={() => sfx.hover()} data-cursor="magnet">
+    <motion.div ref={ref} className={cx('inline-block', className)} style={{ x, y }} onPointerMove={move} onPointerLeave={() => { x.set(0); y.set(0) }}>
       {children}
     </motion.div>
   )
@@ -65,9 +64,9 @@ export function Countdown({ ms, size = 'md', urgent }: { ms: number; size?: 'sm'
   const cls = { sm: 'text-sm', md: 'text-2xl', lg: 'text-5xl', xl: 'text-7xl md:text-8xl' }[size]
   const u = urgent ?? ms < 10_000
   return (
-    <span className={cx('font-num font-semibold tnum inline-flex', cls, u ? 'text-pink' : 'text-blue')} style={{ textShadow: u ? '0 0 24px rgba(255,95,184,.6)' : '0 0 24px rgba(95,212,255,.45)' }} aria-label={`${s} remaining`}>
+    <span className={cx('font-num font-semibold tnum inline-flex', cls, u ? 'text-pink' : 'text-blue')} style={{ textShadow: u ? '0 0 18px rgba(255,95,184,.45)' : '0 0 18px rgba(95,212,255,.32)' }} aria-label={`${s} remaining`}>
       {s.split('').map((ch, i) => (
-        <span key={i} className="relative inline-block overflow-hidden" style={{ width: ch === ':' ? '0.38em' : '0.62em', textAlign: 'center' }}>
+        <span key={i} className="relative inline-block" style={{ width: ch === ':' ? '0.38em' : '0.62em', textAlign: 'center' }}>
           <span className={ch === ':' ? 'inline-block anim-colon' : 'inline-block'}>{ch}</span>
         </span>
       ))}
@@ -98,7 +97,7 @@ export function Tabs<T extends string>({ value, onChange, items, id, size = 'md'
   return (
     <div className={cx('inline-flex rounded-full bg-night/60 p-1 ring-1 ring-lav/15', className)} role="tablist">
       {items.map((it) => (
-        <button key={it.v} role="tab" aria-selected={value === it.v} onClick={() => { onChange(it.v); sfx.tick() }}
+        <button key={it.v} role="tab" aria-selected={value === it.v} onClick={() => { onChange(it.v); }}
           className={cx('relative rounded-full font-extrabold transition-colors', size === 'sm' ? 'px-3 py-1.5 text-xs' : 'px-4 py-2 text-sm', value === it.v ? 'text-night' : 'text-lav hover:text-cream')}>
           {value === it.v && <motion.span layoutId={`tab-${id}`} className="absolute inset-0 rounded-full" style={{ background: 'linear-gradient(180deg,#FFF4FB,#E9DEFF)' }} transition={{ type: 'spring', stiffness: 420, damping: 34 }} />}
           <span className="relative z-10 whitespace-nowrap">{it.label}{it.count != null && <span className={cx('ml-1.5 tnum', value === it.v ? 'text-plum/60' : 'text-lav/60')}>{it.count}</span>}</span>

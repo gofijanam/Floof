@@ -1,18 +1,16 @@
-import { AnimatePresence, motion, useMotionValue, useMotionValueEvent, useScroll, useSpring, useTransform, useReducedMotion } from 'framer-motion'
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
+import { AnimatePresence, motion, useMotionValue, useMotionValueEvent, useScroll, useSpring, useTransform } from 'framer-motion'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
-import type { MochiHandle } from '../components/Mochi3D'
+import { HeroWindow } from '../components/HeroWindow'
 import { Magnetic, Countdown, MiniMeter, LiveDot, Num, Sparkline, SectionTitle, cx } from '../components/ui'
 import { CoinCard } from '../components/CoinCard'
 import { CoinAvatar } from '../components/CoinAvatar'
 import { useCoin, useStore } from '../lib/store'
-import { sfx } from '../lib/audio'
 import { fmtPrice, mmss } from '../lib/format'
 import { maxRaise, FEES } from '../lib/mock'
 import { IArrow, IShield, IGhost, ICheck, IX, ISparkle, ILock, IUsers } from '../components/icons'
 import { confetti } from '../components/confetti'
 
-const Mochi3D = lazy(() => import('../components/Mochi3D').then((m) => ({ default: m.Mochi3D })))
 
 export default function Landing({ ready }: { ready: boolean }) {
   return (
@@ -36,8 +34,6 @@ function Hero({ ready }: { ready: boolean }) {
   const now = useStore((s) => s.now)
   const feed = useStore((s) => s.feed)
   const blocked = useStore((s) => s.stats.snipersBlocked)
-  const mochi = useRef<MochiHandle>(null)
-  const reduced = useReducedMotion()
   // parallax for HUD widgets
   const mx = useMotionValue(0), my = useMotionValue(0)
   const sx = useSpring(mx, { stiffness: 60, damping: 20 }), sy = useSpring(my, { stiffness: 60, damping: 20 })
@@ -47,23 +43,6 @@ function Hero({ ready }: { ready: boolean }) {
     const f = (e: PointerEvent) => { mx.set(e.clientX / innerWidth - 0.5); my.set(e.clientY / innerHeight - 0.5) }
     addEventListener('pointermove', f, { passive: true }); return () => removeEventListener('pointermove', f)
   }, [mx, my])
-  // demo countdown → POOF loop above the mochi's head
-  const [demo, setDemo] = useState(10)
-  const [poofed, setPoofed] = useState(false)
-  const stage = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    if (!ready) return
-    const t = setInterval(() => setDemo((d) => (d <= 0 ? 0 : d - 1)), 1000)
-    return () => clearInterval(t)
-  }, [ready])
-  useEffect(() => {
-    if (demo !== 0 || poofed) return
-    setPoofed(true); mochi.current?.puff(); sfx.poof()
-    const r = stage.current?.getBoundingClientRect()
-    if (r && !reduced) setTimeout(() => confetti({ x: r.left + r.width / 2, y: r.top + r.height * 0.45, n: 70, power: 0.8 }), 180)
-    const t = setTimeout(() => { setPoofed(false); setDemo(10) }, 3200)
-    return () => clearTimeout(t)
-  }, [demo, poofed, reduced])
   const cap = floof ? maxRaise(floof) : 0
   const recent = feed.filter((f) => f.coin === floof?.id && f.kind === 'pledge').slice(0, 1)[0]
   const spark = useMemo(() => Array.from({ length: 24 }, (_, i) => 20 + i * 2 + Math.sin(i * 1.3) * 6), [])
@@ -105,25 +84,8 @@ function Hero({ ready }: { ready: boolean }) {
         </div>
 
         {/* 3D stage + HUD */}
-        <div ref={stage} className="relative h-[min(100vw,440px)] [grid-area:stage] lg:h-[min(86svh,760px)]">
-          <div className="absolute inset-[-10%] rounded-full opacity-70 blur-3xl" style={{ background: 'radial-gradient(circle at 50% 55%, rgba(95,212,255,.28), rgba(182,156,255,.12) 40%, transparent 65%)' }} />
-          <Suspense fallback={<img src="./mochi/idle.webp" alt="" className="absolute left-1/2 top-1/2 w-1/2 -translate-x-1/2 -translate-y-1/2" />}>
-            <Mochi3D ref={mochi} className="absolute inset-0" />
-          </Suspense>
-          {/* countdown chip above head */}
-          <div className="pointer-events-none absolute left-[22%] top-[8%] z-20 -translate-x-1/2 lg:left-1/2 lg:top-[19%]">
-            <AnimatePresence mode="wait">
-              {!poofed ? (
-                <motion.div key="cd" initial={{ scale: 0.6, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 1.6, opacity: 0 }} className={cx('rounded-full border-2 bg-night/80 px-3 py-0.5 font-num text-lg font-semibold tnum', demo <= 3 ? 'border-pink text-pink anim-shiver' : 'border-pink/60 text-cream')}>
-                  0:{String(demo).padStart(2, '0')}
-                </motion.div>
-              ) : (
-                <motion.div key="poof" initial={{ scale: 0.2, rotate: -12, opacity: 0 }} animate={{ scale: 1, rotate: -6, opacity: 1 }} exit={{ opacity: 0, y: -20 }} transition={{ type: 'spring', stiffness: 400, damping: 10 }}
-                  className="h-display text-6xl text-cream md:text-7xl" style={{ WebkitTextStroke: '3px #FF5FB8', textShadow: '0 6px 0 #B69CFF, 0 0 40px rgba(255,95,184,.8)' }}>POOF!</motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-          {poofed && !reduced && <Rays />}
+        <div className="relative h-[min(100vw,440px)] [grid-area:stage] lg:h-[min(86svh,760px)]">
+          <HeroWindow live={!!active} start={floof?.windowStart} end={floof?.windowEnd} now={now} px={p1x} py={p1y} />
           {/* HUD widgets */}
           <motion.div style={{ x: p1x, y: p1y }} className="absolute left-0 top-[4%] z-10 hidden w-[46%] max-w-[230px] md:block lg:left-[0%] lg:top-[10%]">
             <div className="glass neon-b anim-floaty rounded-2xl p-3 md:p-4">
@@ -171,19 +133,11 @@ function Hero({ ready }: { ready: boolean }) {
   )
 }
 
-function Rays() {
-  return (
-    <motion.div initial={{ opacity: 0, scale: 0.6 }} animate={{ opacity: [0, 1, 0], scale: [0.6, 1.3, 1.5] }} transition={{ duration: 1.4 }} className="pointer-events-none absolute left-1/2 top-[48%] h-[130%] w-[130%] -translate-x-1/2 -translate-y-1/2"
-      style={{ background: 'repeating-conic-gradient(from 0deg, rgba(255,95,184,.35) 0 5deg, transparent 5deg 20deg, rgba(95,212,255,.3) 20deg 25deg, transparent 25deg 40deg)', maskImage: 'radial-gradient(circle, #000 15%, transparent 60%)', WebkitMaskImage: 'radial-gradient(circle, #000 15%, transparent 60%)' }} />
-  )
-}
-
-/* ------------------------------------------------------------------ MARQUEE */
 function Marquee() {
   const coins = useStore((s) => s.coins)
   const items = [...coins, ...coins]
   return (
-    <div className="relative z-10 -rotate-1 border-y border-lav/10 bg-plum/60 py-3 backdrop-blur" data-cursor="native">
+    <div className="relative z-10 -rotate-1 border-y border-lav/10 bg-plum/60 py-3 backdrop-blur">
       <div className="flex w-max gap-8 anim-marquee hover:[animation-play-state:paused]">
         {items.map((c, i) => (
           <Link key={i} to={c.status === 'open' || c.status === 'upcoming' ? `/coin/${c.id}` : `/trade/${c.id}`} className="flex items-center gap-2 whitespace-nowrap text-sm font-extrabold">
@@ -211,8 +165,6 @@ function Story() {
   useMotionValueEvent(scrollYProgress, 'change', (v) => setP(v))
   const beat = p < 0.36 ? 0 : p < 0.68 ? 1 : 2
   const prog = useSpring(scrollYProgress, { stiffness: 120, damping: 30 })
-  const lastBeat = useRef(0)
-  useEffect(() => { if (beat !== lastBeat.current) { beat === 2 ? sfx.poof() : sfx.whoosh(); lastBeat.current = beat } }, [beat])
   return (
     <section ref={ref} className="relative h-[340vh]" aria-label="How a fair launch works">
       <div className="sticky top-0 flex h-[100svh] items-center overflow-hidden">
@@ -359,7 +311,7 @@ function Compare() {
   return (
     <section className="mx-auto mt-28 max-w-[1400px] px-4 md:px-6">
       <SectionTitle kicker="why floof" title={<>Fair isn’t a feature.<br /><span className="text-candy">It’s the launch.</span></>} />
-      <div className="mt-4 overflow-x-auto pb-2 pt-12" data-cursor="native">
+      <div className="mt-4 overflow-x-auto pb-2 pt-12">
         <div className="grid min-w-[760px] grid-cols-[1.2fr_1.3fr_1fr_1fr] gap-2">
           <div />
           <div className="neon-p glass relative rounded-t-3xl p-5 text-center">
@@ -388,7 +340,7 @@ function Finale() {
     <section className="relative mx-auto mt-28 max-w-[1400px] px-4 md:px-6">
       <div className="glass neon-p relative overflow-hidden rounded-[2.5rem] px-6 py-14 text-center md:py-20">
         <div className="pointer-events-none absolute inset-0 opacity-60" style={{ background: 'radial-gradient(60% 80% at 50% 110%, rgba(255,95,184,.35), transparent 70%), radial-gradient(40% 60% at 10% 0%, rgba(95,212,255,.25), transparent 70%)' }} />
-        <motion.img src="./mochi/happy.webp" alt="" className="relative mx-auto w-48 md:w-60" whileHover={{ scale: 1.08, rotate: -4 }} whileTap={{ scale: 0.9 }} onTap={(e) => { sfx.poof(); const t = e.target as HTMLElement; const r = t.getBoundingClientRect(); confetti({ x: r.left + r.width / 2, y: r.top + r.height / 2, n: 60 }) }} animate={{ y: [0, -10, 0] }} transition={{ y: { repeat: Infinity, duration: 3 } }} />
+        <motion.img src="./mochi/happy.webp" alt="" className="relative mx-auto w-48 cursor-pointer md:w-60" whileHover={{ scale: 1.08, rotate: -4 }} whileTap={{ scale: 0.9 }} onTap={(e) => { const t = e.target as HTMLElement; const r = t.getBoundingClientRect(); confetti({ x: r.left + r.width / 2, y: r.top + r.height / 2, n: 60 }) }} animate={{ y: [0, -10, 0] }} transition={{ y: { repeat: Infinity, duration: 3 } }} />
         <h2 className="h-display relative mt-4 text-5xl md:text-8xl">Ready to <span className="text-candy">floof?</span></h2>
         <p className="relative mx-auto mt-4 max-w-lg text-lg font-semibold text-lav">Launch with a fair window, one clearing price and a TRUTH grade — or join one before zero.</p>
         <div className="relative mt-8 flex flex-wrap justify-center gap-3">

@@ -10,7 +10,6 @@ import { IBack, ICopy, IGear, ISwap, IShield, IArrow } from '../components/icons
 import { connectWallet, toast, trade, useCoin, useStore } from '../lib/store'
 import { graduationOf, SUPPLY, FEES } from '../lib/mock'
 import { ago, fmtCompact, fmtPrice, fmtUsd, short, SOL_USD } from '../lib/format'
-import { sfx } from '../lib/audio'
 
 import {api} from '../lib/api'
 import {useApi} from '../lib/useApi'
@@ -57,7 +56,7 @@ export default function Trade() {
           <div className="font-num text-3xl font-semibold tnum">{fmtPrice(c.price)} <span className="text-base text-lav">SOL</span></div>
           <div className={cx('text-sm font-extrabold tnum', c.change24h >= 0 ? 'text-mint' : 'text-danger')}>{c.change24h >= 0 ? '▲' : '▼'} {Math.abs(c.change24h).toFixed(2)}% 24h</div>
         </div>
-        <div className="grid flex-1 basis-full grid-cols-3 gap-3 sm:basis-auto sm:grid-cols-5 sm:gap-4 lg:max-w-3xl" data-cursor="native">
+        <div className="grid flex-1 basis-full grid-cols-3 gap-3 sm:basis-auto sm:grid-cols-5 sm:gap-4 lg:max-w-3xl">
           <HS k="Market cap" v={fmtUsd(mcap)} />
           <HS k="Vol 24h" v={`${c.volume24h.toFixed(3)} SOL`} />
           <HS k="Holders" v={c.holders.toLocaleString()} />
@@ -76,7 +75,7 @@ export default function Trade() {
             <div className="mt-3"><NeonChart data={data} height={360} clearing={c.clearingPrice || undefined} /></div>
           </Card>
 
-          <Card className="p-3 md:p-4" data-cursor="native">
+          <Card className="p-3 md:p-4">
             <Tabs id="tt" size="sm" value={tab} onChange={setTab} items={[{ v: 'trades', label: 'Trades' }, { v: 'holders', label: 'Holders', count: c.holders }, { v: 'position', label: 'Your position' }]} />
             <div className="mt-3">
               {tab === 'trades' && (
@@ -179,14 +178,13 @@ function TradePanel({ id }: { id: string }) {
   const err = quoteError || (!amt ? '' : v <= 0 ? 'Enter an amount' : side === 'buy' && q && q.sol > bal ? 'Not enough SOL' : side === 'sell' && q && q.tokens > held + 1 ? `You hold ${fmtCompact(held, 2)} $${c.ticker}` : q && q.impact > 25 ? 'Price impact too high (>25%)' : '')
   const presets = side === 'buy' ? (unit === 'sol' ? ['0.1', '0.5', '1', '2'] : ['100K', '500K', '1M', '5M']) : ['25%', '50%', '75%', '100%']
   const applyPreset = (p: string) => {
-    sfx.tick()
     if (side === 'sell') { const pct = parseInt(p) / 100; if (unit === 'token') setAmt(String(Math.floor(held * pct))); else setAmt((held * pct * c.price * 0.99).toFixed(4)); return }
     if (unit === 'sol') setAmt(p); else setAmt(String(parseFloat(p) * (p.endsWith('M') ? 1e6 : 1e3)))
   }
   const minOut = q ? (side === 'buy' ? q.tokens : q.sol) * (1 - slip / 100) : 0
   const impactCls = !q ? '' : q.impact > 10 ? 'text-danger' : q.impact > 3 ? 'text-peach' : 'text-mint'
   return (
-    <Card neon={side === 'buy' ? 'b' : 'p'} className="p-4" data-cursor="native">
+    <Card neon={side === 'buy' ? 'b' : 'p'} className="p-4">
       <div className="flex items-center justify-between">
         <div className="relative grid flex-1 grid-cols-2 rounded-full bg-night/70 p-1 ring-1 ring-lav/15">
           {(['buy', 'sell'] as const).map((s) => (
@@ -241,7 +239,7 @@ function TradePanel({ id }: { id: string }) {
           { k: 'Fee', v: `${q.fee.toFixed(4)} SOL (${FEES.raydium}% Raydium · ${FEES.creator}% creator · ${FEES.platform}% platform)` },
           { k: 'Route', v: c.status === 'graduated' ? (devnet?'Raydium CPMM':'Sandbox pool') : (devnet?'Raydium LaunchLab':'Sandbox curve') },
         ] : []}
-        onConfirm={async () => { if (!q) throw new Error('Review a quote first.'); const result = await trade(q.quoteId); sfx.pop(side === 'buy' ? 1.3 : 0.8); setAmt(''); toast({ kind: 'success', title: `${side === 'buy' ? 'Bought' : 'Sold'} ${fmtCompact(result.tokens, 2)} $${c.ticker}`, body: `${result.sol.toFixed(4)} test SOL · position saved`, coin: c.id }); return result }} />
+        onConfirm={async () => { if (!q) throw new Error('Review a quote first.'); const result = await trade(q.quoteId); setAmt(''); toast({ kind: 'success', title: `${side === 'buy' ? 'Bought' : 'Sold'} ${fmtCompact(result.tokens, 2)} $${c.ticker}`, body: `${result.sol.toFixed(4)} test SOL · position saved`, coin: c.id }); return result }} />
     </Card>
   )
 }
